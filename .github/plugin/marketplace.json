@@ -1,0 +1,16 @@
+{
+  "name": "tactic",
+  "owner": {
+    "name": "Tactic",
+    "email": "support@gettactic.com"
+  },
+  "plugins": [
+    {
+      "name": "tactic",
+      "source": "./bundles/portable"
+    }
+  ],
+  "metadata": {
+    "description": "Tactic workplace planning and utilization skills with the hosted MCP connector."
+  }
+}

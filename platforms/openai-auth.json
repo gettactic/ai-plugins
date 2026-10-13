@@ -1,0 +1,12 @@
+{
+  "auth": {
+    "type": "oauth",
+    "client": {
+      "mode": "dcr"
+    },
+    "baseScopes": [
+      "tactic",
+      "offline_access"
+    ]
+  }
+}

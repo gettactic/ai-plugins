@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "tactic",
+  "version": "0.2.0",
+  "description": "Plan office days and review workplace utilization with Tactic skills and the hosted MCP connector.",
+  "author": {
+    "name": "Tactic",
+    "email": "support@gettactic.com",
+    "url": "https://gettactic.com"
+  },
+  "homepage": "https://gettactic.com",
+  "keywords": [
+    "workplace",
+    "desks",
+    "meeting rooms",
+    "reservations",
+    "visitors"
+  ],
+  "repository": "https://github.com/gettactic/ai-plugins"
+}
