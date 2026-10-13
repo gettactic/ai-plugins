@@ -21,17 +21,19 @@ capabilities or bypass account permissions.
 
 ## Build
 
-Python 3.11 or newer; the builder has no third-party dependencies:
+Node.js 22 or newer and npm. The builder uses `fflate` for ZIP creation and
+Node's built-in APIs and test runner for everything else:
 
 ```sh
-python3 scripts/build.py
-python3 -m unittest discover -s tests -v
-python3 scripts/build.py --check
+npm ci
+npm run build
+npm test
+npm run check
 ```
 
 The build writes deterministic ZIPs and `SHA256SUMS` to ignored `dist/`, and
 refreshes the tracked `bundles/` folders used for repository-based installation.
-`--check` detects stale tracked bundles without writing files. CI builds and
+`npm run check` detects stale tracked bundles without writing files. CI builds and
 uploads ZIPs as workflow artifacts; it does not publish directory listings.
 
 | Output | Intended use |
@@ -48,7 +50,8 @@ Microsoft 365 app. See [platform instructions](docs/platforms.md).
 
 Edit `skills/`, root `plugin.json` / `mcp.json`, `assets/`, and `platforms/`.
 Do not hand-edit `bundles/`: regenerate and commit the outputs with the source
-change. Versions come from root `plugin.json`; bump it before a release.
+change. Bundle versions come from root `plugin.json`; bump it before a release.
+The private `package.json` describes the build tooling and is never bundled.
 
 The portable MCP definition stays vendor-neutral. The builder adds documented
 OpenAI OAuth metadata for ChatGPT and converts the transport name to `http`

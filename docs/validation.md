@@ -2,14 +2,14 @@
 
 ## Local package checks
 
-Run `python3 -m unittest discover -s tests -v`, `python3 scripts/build.py`, and
-`python3 scripts/build.py --check`. Tests exercise host-specific layouts,
+Install dependencies with `npm ci`, then run `npm test`, `npm run build`, and
+`npm run check`. Tests exercise host-specific layouts,
 credential-file exclusion, symlink rejection, deterministic archives, identical
 skill contents across platforms, and detection of stale generated folders.
 
 Run `claude plugin validate ./bundles/claude` when the Claude CLI is available.
-Skill frontmatter can also be checked with the skill-creator `quick_validate.py`
-tool. These checks do not execute skills or validate live OAuth/UI behavior.
+The builder checks required skill frontmatter and matching folder names.
+These checks do not execute skills or validate live OAuth/UI behavior.
 
 ## Behavioral evaluation
 
