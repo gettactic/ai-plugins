@@ -38,9 +38,9 @@ uploads ZIPs as workflow artifacts; it does not publish directory listings.
 
 | Output | Intended use |
 | --- | --- |
-| `dist/tactic-chatgpt-0.2.0.zip` | OpenAI / ChatGPT plugin upload; also the portable OpenAI plugin layout used by Codex |
-| `dist/tactic-claude-0.2.0.zip` | Claude private upload; directory submission uses `bundles/claude` in this repository |
-| `dist/tactic-portable-0.2.0.zip` | Agent Plugins 1.0 package for GitHub Copilot and input to Microsoft 365 conversion |
+| `dist/tactic-chatgpt-0.2.1.zip` | OpenAI / ChatGPT plugin upload; also the portable OpenAI plugin layout used by Codex |
+| `dist/tactic-claude-0.2.1.zip` | Claude private upload; directory submission uses `bundles/claude` in this repository |
+| `dist/tactic-portable-0.2.1.zip` | Agent Plugins 1.0 package for GitHub Copilot and input to Microsoft 365 conversion |
 
 OpenAI and ChatGPT use the same package. Microsoft 365 Copilot and GitHub
 Copilot are different hosts: the portable ZIP is **not** a tenant-provisioned

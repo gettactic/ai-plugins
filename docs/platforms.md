@@ -33,6 +33,10 @@ tab. This variant has `.claude-plugin/plugin.json`, `.mcp.json` using `http`, an
 the same skills. It intentionally excludes the portable root manifest so the
 archive has exactly one plugin manifest.
 
+Claude's directory listing fields (icon, privacy, terms, support, and documentation)
+come from `platforms/claude.json` and are written into the generated manifest.
+Keep edits in that source file so rebuilding preserves them.
+
 Local check and interactive test from this repository:
 
 ```sh

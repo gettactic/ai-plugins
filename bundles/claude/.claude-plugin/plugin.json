@@ -1,6 +1,6 @@
 {
   "name": "tactic",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Plan office days and review workplace utilization with Tactic skills and the hosted MCP connector.",
   "author": {
     "name": "Tactic",
@@ -15,5 +15,11 @@
     "reservations",
     "visitors"
   ],
-  "repository": "https://github.com/gettactic/ai-plugins"
+  "repository": "https://github.com/gettactic/ai-plugins",
+  "displayName": "Tactic",
+  "icon": "./assets/icon.png",
+  "documentationUrl": "https://help.gettactic.com/hc/en-us",
+  "supportUrl": "https://help.gettactic.com/hc/en-us",
+  "privacyPolicyUrl": "https://gettactic.com/privacy/policy",
+  "termsOfServiceUrl": "https://gettactic.com/terms"
 }
