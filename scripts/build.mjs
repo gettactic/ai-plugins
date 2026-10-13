@@ -83,6 +83,7 @@ export function packageFiles(root, target) {
 
   if (target === 'claude') {
     delete manifest.$schema;
+    Object.assign(manifest, readJson(root, 'platforms/claude.json'));
     files['.claude-plugin/plugin.json'] = jsonBytes(manifest);
     for (const server of Object.values(mcp.mcpServers)) {
       if (server.type !== 'streamable-http') {
