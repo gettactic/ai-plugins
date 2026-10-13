@@ -1,0 +1,9 @@
+/dist/
+/.venv/
+/microsoft365-work/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+.env.*
+
