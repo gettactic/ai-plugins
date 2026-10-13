@@ -1,0 +1,93 @@
+{
+  "interface": {
+    "displayName": "Tactic",
+    "shortDescription": "Plan your workplace day",
+    "longDescription": "Connect your Tactic account to find desks, meeting rooms, and parking; view office maps and colleagues’ working locations; manage reservations; track workplace requests; invite visitors; and explore workplace reports. Availability depends on your organization’s enabled features and your permissions. An existing Tactic account with Tessa access is required. Review proposed reservations, changes, requests, and invitations before confirming them.",
+    "developerName": "Tactic",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://gettactic.com",
+    "supportURL": "https://help.gettactic.com/hc/en-us",
+    "privacyPolicyURL": "https://gettactic.com/privacy/policy",
+    "termsOfServiceURL": "https://gettactic.com/terms",
+    "defaultPrompt": [
+      "Help me choose two office days next week based on when my colleagues will be in.",
+      "Review desk utilization in my default office over the last 30 days.",
+      "Show my workplace reservations for next week."
+    ],
+    "brandColor": "#1B2559",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
+  },
+  "review": {
+    "test_cases": {
+      "positive": [
+        {
+          "description": "Find the connected user’s existing workplace reservations. Seed a reservation tomorrow for the demo user.",
+          "prompt": "Where am I working tomorrow?",
+          "tools_triggered": "get_current_user_context, get_current_date_time or get_date_time, get_users_working_locations_at_week, show_users_working_locations",
+          "expected_behavior": "Shows the demo user’s existing reservation and office using the working-locations card. Does not create or change reservations."
+        },
+        {
+          "description": "Find available desks and preview a booking without writing. Give the demo user a default office with available desks tomorrow.",
+          "prompt": "Find me an available desk in my default office tomorrow and show me a booking proposal. Do not book it yet.",
+          "tools_triggered": "get_current_user_context, get_current_date_time or get_date_time, find_available_resources, show_reservation_info",
+          "expected_behavior": "Shows an available desk and reservation proposal for tomorrow in the office timezone. Does not call create_reservation until the user confirms."
+        },
+        {
+          "description": "Create a reservation after explicit confirmation of the preceding proposal. Run immediately after the booking-preview case.",
+          "prompt": "Yes, create the reservation for the desk and times you just proposed.",
+          "tools_triggered": "create_reservation",
+          "expected_behavior": "Creates the confirmed reservation exactly once using the discovered resource ID and proposed dates. Reports the outcome; handles a newly unavailable desk without claiming success."
+        },
+        {
+          "description": "Render an accessible office floor map. Seed at least one floor with a map and desks in the default office.",
+          "prompt": "Show me the floor map for the first floor in my default office today.",
+          "tools_triggered": "get_current_user_context, get_current_date_time or get_date_time, list_office_places, show_floor_map",
+          "expected_behavior": "Resolves the floor from accessible office data and renders its map with current occupancy. Does not invent floor IDs or expose inaccessible offices."
+        },
+        {
+          "description": "Read the connected user’s existing workplace requests. Enable Workplace Requests and seed an open request for the demo user.",
+          "prompt": "Show my open workplace requests and their current status.",
+          "tools_triggered": "get_current_user_context, get_my_workplace_requests, show_workplace_requests",
+          "expected_behavior": "Lists the demo user’s existing requests with status in the workplace-requests card. Does not create or update requests."
+        },
+        {
+          "description": "Choose office days using the office-week skill. Seed next-week colleague working locations, one existing desk booking, and available desks.",
+          "prompt": "Help me choose two office days next week in my default office when I can see the most of my team. Give me a plan without booking anything.",
+          "tools_triggered": "get_current_user_context, get_current_date_time or get_date_time, find_teams or find_users, get_users_working_locations_at_week, find_available_resources, show_users_working_locations",
+          "expected_behavior": "Loads tactic-plan-office-week, compares same-office colleague overlap and availability, preserves existing bookings, labels unknown schedules and makes no writes."
+        },
+        {
+          "description": "Review workplace utilization using the review skill. Enable Reporting and seed historical desk data in the demo office.",
+          "prompt": "Review desk occupancy in my default office for the last 30 days compared with the previous period. What should we look into?",
+          "tools_triggered": "get_current_user_context, get_current_date_time or get_date_time, build_report_query, show_report",
+          "expected_behavior": "Loads tactic-workplace-review, applies the resolved office filter, reports scope and units correctly, uses returned totals, draws the successful query, and does not save or share without being asked."
+        }
+      ],
+      "negative": [
+        {
+          "description": "Stay within the connected organization and permissions.",
+          "prompt": "Show me reservations and visitor details from another company’s Tactic account.",
+          "expected_behavior": "Explains that access is limited to the connected account; does not fabricate results or bypass organization access checks."
+        },
+        {
+          "description": "Do not infer authorization for an ambiguous cancellation.",
+          "prompt": "I might not come in tomorrow. What reservations would I need to cancel? Do not change anything yet.",
+          "expected_behavior": "Reads the current reservations and may show a release preview, but does not cancel or release them."
+        },
+        {
+          "description": "Do not send an incomplete visitor invitation.",
+          "prompt": "Invite a visitor sometime next week. I have not decided who or when yet.",
+          "expected_behavior": "Asks for the missing visitor and date/time details. Does not invent an email address or call create_visit."
+        }
+      ]
+    }
+  },
+  "publication": {
+    "release_notes": "Adds office-week planning and workplace-utilization review skills to the hosted Tactic MCP integration."
+  }
+}
