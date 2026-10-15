@@ -1,0 +1,45 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.29/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.29",
+  "id": "84883618-f0fc-425e-8546-7e0a79d1c553",
+  "developer": {
+    "name": "Tactic",
+    "websiteUrl": "https://gettactic.com",
+    "privacyUrl": "https://gettactic.com/privacy/policy",
+    "termsOfUseUrl": "https://gettactic.com/terms"
+  },
+  "name": {
+    "short": "Tactic",
+    "full": "Tactic for Copilot Cowork"
+  },
+  "description": {
+    "short": "Plan office days and review workplace utilization with Tactic.",
+    "full": "Connect your Tactic account to plan office days around colleagues, find available desks, and review workplace utilization. Includes skills for planning an office week and analyzing workplace usage. Access depends on your Tactic permissions and enabled organization features; reporting requires Reporting access."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#1B2559",
+  "version": "0.2.1",
+  "agentSkills": [
+    {
+      "folder": "./skills/tactic-plan-office-week"
+    },
+    {
+      "folder": "./skills/tactic-workplace-review"
+    }
+  ],
+  "agentConnectors": [
+    {
+      "id": "tactic",
+      "displayName": "Tactic",
+      "description": "Plan office days and review workplace utilization with Tactic skills and the hosted MCP connector.",
+      "toolSource": {
+        "remoteMcpServer": {
+          "mcpServerUrl": "https://ai.gettactic.com/mcp"
+        }
+      }
+    }
+  ]
+}

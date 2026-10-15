@@ -8,7 +8,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, wr
 import { zipSync } from 'fflate';
 
 export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-export const TARGETS = ['portable', 'chatgpt', 'claude'];
+export const TARGETS = ['portable', 'chatgpt', 'claude', 'cowork'];
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const portablePath = (root, path) => relative(root, path).split(sep).join('/');
 
@@ -81,7 +81,29 @@ export function packageFiles(root, target) {
     }
   }
 
-  if (target === 'claude') {
+  if (target === 'cowork') {
+    if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Cowork requires a three-part numeric version');
+    const server = mcp.mcpServers.tactic;
+    if (server.type !== 'streamable-http' || new URL(server.url).protocol !== 'https:') {
+      throw new Error('Cowork requires a remote HTTPS Streamable HTTP server');
+    }
+    const cowork = readJson(root, 'platforms/cowork.json');
+    cowork.version = version;
+    cowork.agentSkills = skillNames.map((name) => ({ folder: `./skills/${name}` }));
+    // Omit authorization so Cowork discovers OAuth and registers its own client.
+    // Explicit type None would mean anonymous access, not DCR.
+    cowork.agentConnectors = [{
+      id: 'tactic', displayName: 'Tactic', description: manifest.description,
+      toolSource: { remoteMcpServer: { mcpServerUrl: server.url } },
+    }];
+    delete files['README.md'];
+    delete files.LICENSE;
+    delete files['assets/icon.png'];
+    files['manifest.json'] = jsonBytes(cowork);
+    for (const name of ['color.png', 'outline.png']) {
+      files[name] = readFile(join(root, 'assets/cowork', name));
+    }
+  } else if (target === 'claude') {
     delete manifest.$schema;
     Object.assign(manifest, readJson(root, 'platforms/claude.json'));
     files['.claude-plugin/plugin.json'] = jsonBytes(manifest);

@@ -22,7 +22,7 @@ function fixture(t) {
 }
 
 test('platform layouts preserve endpoint and use host-specific authentication', () => {
-  for (const target of TARGETS) {
+  for (const target of TARGETS.filter((target) => target !== 'cowork')) {
     const { files } = packageFiles(ROOT, target);
     let server;
     if (target === 'claude') {
