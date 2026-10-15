@@ -82,32 +82,135 @@ surface renders it. Other Copilot clients have their own installation controls.
 
 Reference: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference
 
-## Microsoft 365 Copilot / Copilot Cowork
+## Microsoft Copilot Studio
 
-Microsoft's WIQD tooling imports portable or Claude plugins into a Microsoft 365
-project. The `wiqd plugin` command surface is currently alpha. Use the portable
-folder as input, then perform Microsoft's tenant lifecycle:
+Run `npm run build`. For a Studio agent with **Build → Skills** (the GitHub
+Copilot harness), upload each `dist/tactic-copilot-studio-<skill>-<version>.zip`
+separately through **Add skill → Upload a skill**. Each archive has a root
+`SKILL.md` and any supporting references; the reporting reference is preserved.
+
+`dist/tactic-copilot-studio-setup-<version>.zip` is an extract-first handoff kit
+containing those uploads, connection values generated from the canonical MCP
+configuration, an icon, and instructions for both Studio experiences. It is not
+a Power Platform solution or an automatic agent/connector installer. The generic
+portable and Cowork plugin ZIPs are not Studio skill uploads either.
+
+Connect the Tactic MCP separately in Tools. Standard-experience Studio documents
+OAuth Dynamic discovery. For the new experience, select it if offered; Microsoft's
+new-experience page doesn't enumerate the available authentication choices, so
+that flow still needs tenant verification. Tactic uses DCR and PKCE and has no
+static client secret to paste into a confidential-client-only form.
+
+If the agent has Topics and no Skills section, it uses the standard harness and
+cannot use these skill ZIPs. Its complete agent/connector package requires a
+Power Platform solution export. See the [full setup instructions](../platforms/copilot-studio-readme.md).
+
+References (checked 2026-10-15):
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/agents-experience/skills-add-existing
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/agents-experience/tools-add-mcp-server
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/authoring-solutions-import-export
+
+## Microsoft 365 Copilot Cowork
+
+Build with `npm run build` and upload `dist/tactic-cowork-<version>.zip`.
+The Node pipeline assembles Microsoft's documented app package directly; no
+Microsoft CLI, sign-in, tenant provisioning, or solution export is needed to
+create the ZIP. It contains a v1.29 unified app manifest, two correctly sized
+icons, the shared skills and references, and a remote MCP connector.
+
+`platforms/cowork.json` stores the app's permanent ID and presentation metadata.
+Keep that ID for updates. The Cowork app version also lives in that file and must
+have a major version of at least 1. It is separate from manifest schema 1.29 and
+the other hosts' plugin versions. The builder takes the connector description
+from `plugin.json`, the server URL from `mcp.json`, and skill folders from `skills/`.
+Bump the Cowork app version before uploading an update to an installed app.
+
+Authentication uses Cowork's automatic OAuth Dynamic Client Registration (DCR).
+The connector deliberately omits `authorization`; do not replace it with
+`{ "type": "None" }` or a placeholder vault reference. Each user connects their
+own Tactic account. This DCR package targets **Cowork**, not Copilot Chat or
+Copilot Studio. Copilot Chat requires a separately configured OAuthPluginVault
+registration. Studio uses its MCP onboarding or Power Platform solution flow.
+
+Manifest 1.29 allows dynamic tool discovery without a packaged
+`mcpToolDescription` file. Do not downgrade to 1.28 without adding the tool
+metadata required by that version. No backend deployment is performed by the
+package build; the hosted MCP must already be available.
+
+### Manual internal upload
+
+1. Use an account allowed to upload custom apps in your Microsoft 365 tenant.
+2. In Microsoft 365 admin center, open **Agents → Tools → Registry → Upload**.
+3. Select the Cowork ZIP as built, without extracting and re-zipping a parent folder.
+4. Review its MCP and skill components, scope the intended users/groups, and install.
+5. In Cowork, open **Sources & Skills → Plugins → Discover**, find Tactic,
+   and connect your Tactic account.
+
+This is internal distribution, not a public Partner Center submission. Cowork
+and custom plugins must be enabled for the intended users. If your tenant
+rejects the schema or does not expose this upload flow, retain the validation
+message and check feature availability with your Microsoft admin.
+
+### Test before rollout
+
+Check the exact upload archive with `npm run validate:cowork` (or pass another
+archive with `npm run validate:cowork -- /path/to/client-upload.zip`). This reads
+the ZIP itself, validates its manifest, parses each skill's YAML, checks names
+against folders, and prints its SHA-256 checksum. It does not contact Microsoft
+or confirm acceptance by the tenant validator.
+
+If the portal rejects it, retain the original ZIP and the portal's full error
+or validation response, including a correlation ID if supplied. A debugging
+summary claiming missing frontmatter is not enough to diagnose a failure: the
+0.2.1 Cowork archive already contains valid YAML metadata and matching names.
+Microsoft Agents Toolkit 1.1.18 did reject that archive for
+`VersionHasMajorLessThan1`: its app version was 0.2.1. The replacement is 1.0.0;
+the manifest schema remains 1.29. Do not distribute the earlier Cowork ZIP.
+
+Run Microsoft's package validator as well as local checks before distributing:
 
 ```sh
-wiqd plugin import --path ./bundles/portable \
-  --privacy-url https://gettactic.com/privacy/policy \
-  --terms-url https://gettactic.com/terms
+npx --yes --package=@microsoft/m365agentstoolkit-cli@1.1.18 atk validate \
+  --package-file dist/tactic-cowork-1.0.0.zip \
+  --validate-method validation-rules --interactive false --telemetry false
 ```
 
-In the imported project, inspect the converted skills, connector, and OAuth
-configuration; then authenticate to the intended Microsoft tenant and run:
+These are the flags exposed by CLI 1.1.18; some Learn examples use older flag
+names. On 2026-10-15, this command returned **59 passed** for the 1.0.0 ZIP with
+SHA-256 `34cf235a7ec09aeaed9f996f045d559475c8fdd9ed73097c4ad4be8f407f2889`.
+This is Microsoft package-rule validation, not a tenant installation, OAuth,
+skill activation, or runtime test. Update the filename when releasing a new version.
 
-```sh
-wiqd plugin validate
-wiqd plugin provision --env dev
-wiqd plugin package --env dev
-wiqd plugin validate --mode deep --env dev
-```
+Do not rename skills, change schema versions, or invent OAuth credentials merely
+to try to clear an unspecified validation error.
 
-Provisioning establishes the app identity used by packaging. The portable ZIP
-is import input, not an installable Microsoft 365 app ZIP. No Microsoft app ID,
-OAuth registration, tenant provisioning, or end-to-end test is supplied here.
-Keep generated tenant projects and environment files outside committed bundles
-(the root `microsoft365-work/` directory is ignored for this purpose).
+- Connect a normal Tactic user and verify tool discovery and a read-only query.
+- Ask for an office-week plan; verify colleague plans, existing reservations,
+  and available desks are used without creating bookings automatically.
+- With Reporting permission, request a workplace utilization comparison.
+- Verify a colleague signs in with their own account and sees only permitted data.
+- Test a confirmed booking in a test workspace and confirm cancellation/cleanup.
 
-Reference: https://microsoft.github.io/wiqd/getting-started/build-a-plugin/
+`npm test` checks the manifest against a vendored copy of Microsoft's 1.29
+schema, skill references, icon dimensions/backgrounds, and deterministic ZIPs.
+`npm run check` detects generated-file drift. These are local checks, not
+Microsoft upload certification or proof that OAuth works in Cowork. The first
+tenant upload and authenticated smoke test remain necessary.
+
+The color icon uses a solid white background and Tactic's existing navy vector
+mark. The outline icon uses a white mark on transparency. Their source is
+`assets/tactic-mark.svg` (copied from `web/apps/web/public/images/favicon.svg`).
+Regenerate them with `npm run icons:cowork`, then `npm run build`.
+
+Microsoft also documents `atk import openplugin` for one-off Claude conversions.
+It generates a preview manifest and placeholder OAuth registration references;
+our pipeline avoids those placeholders by generating the documented Cowork DCR
+configuration. The guide warns that `wiqd plugin import` does not yet scaffold
+all deployment files, so importing with wiqd is not our packaging workflow.
+
+Reference (checked 2026-10-15):
+https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/cowork-plugin-development
+
+The current **Agents → Tools → Registry → Upload** route is documented here:
+https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-plugins-skills-mcp-servers#upload-plugins-or-skills

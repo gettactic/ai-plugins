@@ -9,9 +9,16 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "node scripts/build.mjs --check",
-    "test": "node --test"
+    "test": "node --test",
+    "icons:cowork": "node scripts/cowork-icons.mjs",
+    "validate:cowork": "node scripts/validate-cowork.mjs"
   },
   "devDependencies": {
-    "fflate": "0.8.3"
+    "ajv": "8.20.0",
+    "ajv-draft-04": "1.0.0",
+    "ajv-formats": "3.0.1",
+    "fflate": "0.8.3",
+    "sharp": "0.35.5",
+    "yaml": "2.9.1"
   }
 }

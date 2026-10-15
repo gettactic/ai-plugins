@@ -22,13 +22,15 @@ capabilities or bypass account permissions.
 ## Build
 
 Node.js 22 or newer and npm. The builder uses `fflate` for ZIP creation and
-Node's built-in APIs and test runner for everything else:
+Node's built-in APIs and test runner. Cowork validation uses Ajv, and its vector
+icon exports use Sharp:
 
 ```sh
 npm ci
 npm run build
 npm test
 npm run check
+npm run validate:cowork
 ```
 
 The build writes deterministic ZIPs and `SHA256SUMS` to ignored `dist/`, and
@@ -40,17 +42,29 @@ uploads ZIPs as workflow artifacts; it does not publish directory listings.
 | --- | --- |
 | `dist/tactic-chatgpt-0.2.1.zip` | OpenAI / ChatGPT plugin upload; also the portable OpenAI plugin layout used by Codex |
 | `dist/tactic-claude-0.2.1.zip` | Claude private upload; directory submission uses `bundles/claude` in this repository |
-| `dist/tactic-portable-0.2.1.zip` | Agent Plugins 1.0 package for GitHub Copilot and input to Microsoft 365 conversion |
+| `dist/tactic-portable-0.2.1.zip` | Agent Plugins 1.0 package for GitHub Copilot |
+| `dist/tactic-cowork-1.0.0.zip` | Microsoft 365 Copilot Cowork app package for manual tenant upload |
+| `dist/tactic-copilot-studio-setup-0.2.1.zip` | Extract-first Studio setup kit with individual skill ZIPs; **not** an Import solution ZIP |
+| `dist/tactic-copilot-studio-<skill>-0.2.1.zip` | Upload one skill in a Studio agent's Build → Skills screen (GitHub Copilot harness) |
 
 OpenAI and ChatGPT use the same package. Microsoft 365 Copilot and GitHub
 Copilot are different hosts: the portable ZIP is **not** a tenant-provisioned
-Microsoft 365 app. See [platform instructions](docs/platforms.md).
+Microsoft 365 app. Use the Cowork ZIP for that host; it includes the skills and
+MCP connection with automatic OAuth registration. Upload it through the Microsoft
+365 admin center, not Copilot Studio. See [platform instructions](docs/platforms.md).
+
+The **portable** bundle contains generic Agent Plugins 1.0 metadata, the MCP URL,
+skills, and assets, without platform-specific extensions. It is for hosts that
+accept that layout, such as GitHub Copilot CLI; it is not a universal installer.
+Studio skill uploads still require a separately configured MCP connection.
 
 ## Maintain one source
 
 Edit `skills/`, root `plugin.json` / `mcp.json`, `assets/`, and `platforms/`.
 Do not hand-edit `bundles/`: regenerate and commit the outputs with the source
-change. Bundle versions come from root `plugin.json`; bump it before a release.
+change. Bundle versions come from root `plugin.json`, except Cowork's app version
+in `platforms/cowork.json` (Microsoft requires a major version of at least 1).
+Bump the appropriate version before a release; manifest schema 1.29 is separate.
 The private `package.json` describes the build tooling and is never bundled.
 
 The portable MCP definition stays vendor-neutral. The builder adds documented
