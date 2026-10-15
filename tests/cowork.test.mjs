@@ -15,6 +15,10 @@ const validate = ajv.compile(JSON.parse(readFileSync(join(ROOT, 'schemas/microso
 test('actual Cowork ZIP contains parseable YAML; malformed and mismatched metadata fail', () => {
   const { files } = packageFiles(ROOT, 'cowork');
   assert.equal(inspectCoworkZip(zipBytes(files)).skills.length, 2);
+  const invalidVersion = { ...JSON.parse(files['manifest.json']), version: '0.2.1' };
+  assert.throws(() => inspectCoworkZip(zipBytes({
+    ...files, 'manifest.json': Buffer.from(JSON.stringify(invalidVersion)),
+  })), /major version at least 1/);
   const path = 'skills/tactic-plan-office-week/SKILL.md';
   for (const [content, message] of [
     ['No frontmatter', /Missing YAML frontmatter/],

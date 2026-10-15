@@ -43,7 +43,7 @@ uploads ZIPs as workflow artifacts; it does not publish directory listings.
 | `dist/tactic-chatgpt-0.2.1.zip` | OpenAI / ChatGPT plugin upload; also the portable OpenAI plugin layout used by Codex |
 | `dist/tactic-claude-0.2.1.zip` | Claude private upload; directory submission uses `bundles/claude` in this repository |
 | `dist/tactic-portable-0.2.1.zip` | Agent Plugins 1.0 package for GitHub Copilot |
-| `dist/tactic-cowork-0.2.1.zip` | Microsoft 365 Copilot Cowork app package for manual tenant upload |
+| `dist/tactic-cowork-1.0.0.zip` | Microsoft 365 Copilot Cowork app package for manual tenant upload |
 | `dist/tactic-copilot-studio-setup-0.2.1.zip` | Extract-first Studio setup kit with individual skill ZIPs; **not** an Import solution ZIP |
 | `dist/tactic-copilot-studio-<skill>-0.2.1.zip` | Upload one skill in a Studio agent's Build → Skills screen (GitHub Copilot harness) |
 
@@ -62,7 +62,9 @@ Studio skill uploads still require a separately configured MCP connection.
 
 Edit `skills/`, root `plugin.json` / `mcp.json`, `assets/`, and `platforms/`.
 Do not hand-edit `bundles/`: regenerate and commit the outputs with the source
-change. Bundle versions come from root `plugin.json`; bump it before a release.
+change. Bundle versions come from root `plugin.json`, except Cowork's app version
+in `platforms/cowork.json` (Microsoft requires a major version of at least 1).
+Bump the appropriate version before a release; manifest schema 1.29 is separate.
 The private `package.json` describes the build tooling and is never bundled.
 
 The portable MCP definition stays vendor-neutral. The builder adds documented

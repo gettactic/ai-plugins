@@ -19,6 +19,7 @@ export function inspectCoworkZip(bytes) {
   assert.ok(files['manifest.json'], 'manifest.json must be at the ZIP root');
   const manifest = JSON.parse(Buffer.from(files['manifest.json']).toString('utf8'));
   assert.ok(validate(manifest), JSON.stringify(validate.errors, null, 2));
+  assert.match(manifest.version, /^[1-9]\d*\.\d+\.\d+$/, 'Microsoft app version must have major version at least 1');
   for (const file of Object.values(manifest.icons)) assert.ok(files[file], `Missing icon: ${file}`);
   const skills = [];
   const names = new Set();
@@ -54,7 +55,7 @@ export function inspectCoworkZip(bytes) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const version = JSON.parse(readFileSync(join(ROOT, 'plugin.json'))).version;
+    const version = JSON.parse(readFileSync(join(ROOT, 'platforms/cowork.json'))).version;
     const file = process.argv[2] ?? join(ROOT, 'dist', `tactic-cowork-${version}.zip`);
     console.log(JSON.stringify(inspectCoworkZip(readFileSync(file)), null, 2));
   } catch (error) {

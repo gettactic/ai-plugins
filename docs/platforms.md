@@ -120,9 +120,11 @@ create the ZIP. It contains a v1.29 unified app manifest, two correctly sized
 icons, the shared skills and references, and a remote MCP connector.
 
 `platforms/cowork.json` stores the app's permanent ID and presentation metadata.
-Keep that ID for updates. The builder takes version and connector description
-from `plugin.json`, the server URL from `mcp.json`, and discovers skill folders
-from `skills/`. Bump the version before uploading an update to an installed app.
+Keep that ID for updates. The Cowork app version also lives in that file and must
+have a major version of at least 1. It is separate from manifest schema 1.29 and
+the other hosts' plugin versions. The builder takes the connector description
+from `plugin.json`, the server URL from `mcp.json`, and skill folders from `skills/`.
+Bump the Cowork app version before uploading an update to an installed app.
 
 Authentication uses Cowork's automatic OAuth Dynamic Client Registration (DCR).
 The connector deliberately omits `authorization`; do not replace it with
@@ -162,6 +164,24 @@ If the portal rejects it, retain the original ZIP and the portal's full error
 or validation response, including a correlation ID if supplied. A debugging
 summary claiming missing frontmatter is not enough to diagnose a failure: the
 0.2.1 Cowork archive already contains valid YAML metadata and matching names.
+Microsoft Agents Toolkit 1.1.18 did reject that archive for
+`VersionHasMajorLessThan1`: its app version was 0.2.1. The replacement is 1.0.0;
+the manifest schema remains 1.29. Do not distribute the earlier Cowork ZIP.
+
+Run Microsoft's package validator as well as local checks before distributing:
+
+```sh
+npx --yes --package=@microsoft/m365agentstoolkit-cli@1.1.18 atk validate \
+  --package-file dist/tactic-cowork-1.0.0.zip \
+  --validate-method validation-rules --interactive false --telemetry false
+```
+
+These are the flags exposed by CLI 1.1.18; some Learn examples use older flag
+names. On 2026-10-15, this command returned **59 passed** for the 1.0.0 ZIP with
+SHA-256 `34cf235a7ec09aeaed9f996f045d559475c8fdd9ed73097c4ad4be8f407f2889`.
+This is Microsoft package-rule validation, not a tenant installation, OAuth,
+skill activation, or runtime test. Update the filename when releasing a new version.
+
 Do not rename skills, change schema versions, or invent OAuth credentials merely
 to try to clear an unspecified validation error.
 

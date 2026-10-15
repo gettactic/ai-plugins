@@ -97,13 +97,14 @@ export function packageFiles(root, target) {
     }
     return { version, files: studioFiles };
   } else if (target === 'cowork') {
-    if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Cowork requires a three-part numeric version');
     const server = mcp.mcpServers.tactic;
     if (server.type !== 'streamable-http' || new URL(server.url).protocol !== 'https:') {
       throw new Error('Cowork requires a remote HTTPS Streamable HTTP server');
     }
     const cowork = readJson(root, 'platforms/cowork.json');
-    cowork.version = version;
+    if (!/^[1-9]\d*\.\d+\.\d+$/.test(cowork.version ?? '')) {
+      throw new Error('Cowork requires a three-part numeric app version with major version at least 1');
+    }
     cowork.agentSkills = skillNames.map((name) => ({ folder: `./skills/${name}` }));
     // Omit authorization so Cowork discovers OAuth and registers its own client.
     // Explicit type None would mean anonymous access, not DCR.
@@ -118,6 +119,7 @@ export function packageFiles(root, target) {
     for (const name of ['color.png', 'outline.png']) {
       files[name] = readFile(join(root, 'assets/cowork', name));
     }
+    return { version: cowork.version, files };
   } else if (target === 'claude') {
     delete manifest.$schema;
     Object.assign(manifest, readJson(root, 'platforms/claude.json'));
