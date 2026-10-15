@@ -43,12 +43,19 @@ uploads ZIPs as workflow artifacts; it does not publish directory listings.
 | `dist/tactic-claude-0.2.1.zip` | Claude private upload; directory submission uses `bundles/claude` in this repository |
 | `dist/tactic-portable-0.2.1.zip` | Agent Plugins 1.0 package for GitHub Copilot |
 | `dist/tactic-cowork-0.2.1.zip` | Microsoft 365 Copilot Cowork app package for manual tenant upload |
+| `dist/tactic-copilot-studio-setup-0.2.1.zip` | Extract-first Studio setup kit with individual skill ZIPs; **not** an Import solution ZIP |
+| `dist/tactic-copilot-studio-<skill>-0.2.1.zip` | Upload one skill in a Studio agent's Build → Skills screen (GitHub Copilot harness) |
 
 OpenAI and ChatGPT use the same package. Microsoft 365 Copilot and GitHub
 Copilot are different hosts: the portable ZIP is **not** a tenant-provisioned
 Microsoft 365 app. Use the Cowork ZIP for that host; it includes the skills and
 MCP connection with automatic OAuth registration. Upload it through the Microsoft
 365 admin center, not Copilot Studio. See [platform instructions](docs/platforms.md).
+
+The **portable** bundle contains generic Agent Plugins 1.0 metadata, the MCP URL,
+skills, and assets, without platform-specific extensions. It is for hosts that
+accept that layout, such as GitHub Copilot CLI; it is not a universal installer.
+Studio skill uploads still require a separately configured MCP connection.
 
 ## Maintain one source
 

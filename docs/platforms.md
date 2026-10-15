@@ -82,6 +82,35 @@ surface renders it. Other Copilot clients have their own installation controls.
 
 Reference: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference
 
+## Microsoft Copilot Studio
+
+Run `npm run build`. For a Studio agent with **Build → Skills** (the GitHub
+Copilot harness), upload each `dist/tactic-copilot-studio-<skill>-<version>.zip`
+separately through **Add skill → Upload a skill**. Each archive has a root
+`SKILL.md` and any supporting references; the reporting reference is preserved.
+
+`dist/tactic-copilot-studio-setup-<version>.zip` is an extract-first handoff kit
+containing those uploads, connection values generated from the canonical MCP
+configuration, an icon, and instructions for both Studio experiences. It is not
+a Power Platform solution or an automatic agent/connector installer. The generic
+portable and Cowork plugin ZIPs are not Studio skill uploads either.
+
+Connect the Tactic MCP separately in Tools. Standard-experience Studio documents
+OAuth Dynamic discovery. For the new experience, select it if offered; Microsoft's
+new-experience page doesn't enumerate the available authentication choices, so
+that flow still needs tenant verification. Tactic uses DCR and PKCE and has no
+static client secret to paste into a confidential-client-only form.
+
+If the agent has Topics and no Skills section, it uses the standard harness and
+cannot use these skill ZIPs. Its complete agent/connector package requires a
+Power Platform solution export. See the [full setup instructions](../platforms/copilot-studio-readme.md).
+
+References (checked 2026-10-15):
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/agents-experience/skills-add-existing
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/agents-experience/tools-add-mcp-server
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent
+- https://learn.microsoft.com/en-us/microsoft-copilot-studio/authoring-solutions-import-export
+
 ## Microsoft 365 Copilot Cowork
 
 Build with `npm run build` and upload `dist/tactic-cowork-<version>.zip`.

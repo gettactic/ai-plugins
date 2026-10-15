@@ -1,0 +1,8 @@
+Name: Tactic
+Description: Plan office days and review workplace utilization with Tactic skills and the hosted MCP connector.
+Server URL: https://ai.gettactic.com/mcp
+Transport: Streamable HTTP
+Authentication: OAuth 2.0 with dynamic client registration and PKCE
+
+These are setup values to enter in Studio, not an import manifest.
+Use Dynamic discovery where available. Never select anonymous/None.

@@ -8,7 +8,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, wr
 import { zipSync } from 'fflate';
 
 export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-export const TARGETS = ['portable', 'chatgpt', 'claude', 'cowork'];
+export const TARGETS = ['portable', 'chatgpt', 'claude', 'cowork', 'copilot-studio-setup'];
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const portablePath = (root, path) => relative(root, path).split(sep).join('/');
 
@@ -81,7 +81,22 @@ export function packageFiles(root, target) {
     }
   }
 
-  if (target === 'cowork') {
+  if (target === 'copilot-studio-setup') {
+    const studioFiles = {
+      'README.md': readFile(join(root, 'platforms/copilot-studio-readme.md')),
+      'connection.txt': Buffer.from(`Name: Tactic\nDescription: ${manifest.description}\nServer URL: ${mcp.mcpServers.tactic.url}\nTransport: Streamable HTTP\nAuthentication: OAuth 2.0 with dynamic client registration and PKCE\n\nThese are setup values to enter in Studio, not an import manifest.\nUse Dynamic discovery where available. Never select anonymous/None.\n`),
+      LICENSE: files.LICENSE,
+      'assets/icon.png': files['assets/icon.png'],
+    };
+    for (const name of skillNames) {
+      const prefix = `skills/${name}/`;
+      const skillFiles = Object.fromEntries(Object.entries(files)
+        .filter(([path]) => path.startsWith(prefix))
+        .map(([path, bytes]) => [path.slice(prefix.length), bytes]));
+      studioFiles[`uploads/tactic-copilot-studio-${name.slice('tactic-'.length)}-${version}.zip`] = zipBytes(skillFiles);
+    }
+    return { version, files: studioFiles };
+  } else if (target === 'cowork') {
     if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Cowork requires a three-part numeric version');
     const server = mcp.mcpServers.tactic;
     if (server.type !== 'streamable-http' || new URL(server.url).protocol !== 'https:') {
@@ -125,7 +140,7 @@ export function packageFiles(root, target) {
   return { version, files };
 }
 
-export function writeZip(path, files) {
+export function zipBytes(files) {
   const entries = {};
   for (const name of Object.keys(files).sort()) {
     entries[name] = [files[name], {
@@ -135,7 +150,11 @@ export function writeZip(path, files) {
       attrs: 0o100644 * 65536,
     }];
   }
-  writeFileSync(path, zipSync(entries, { level: 9 }));
+  return Buffer.from(zipSync(entries, { level: 9 }));
+}
+
+export function writeZip(path, files) {
+  writeFileSync(path, zipBytes(files));
 }
 
 export function syncBundle(directory, files, check) {
@@ -176,6 +195,17 @@ function main() {
       writeZip(path, files);
       checksums.push(`${createHash('sha256').update(readFileSync(path)).digest('hex')}  ${filename}\n`);
       console.log(portablePath(ROOT, path));
+      // Expose the Studio skill uploads directly as well as in the setup kit.
+      if (target === 'copilot-studio-setup') {
+        for (const [name, bytes] of Object.entries(files).filter(([name]) => name.startsWith('uploads/'))) {
+          const filename = name.slice('uploads/'.length);
+          const path = join(dist, filename);
+          if (lstatSync(path, { throwIfNoEntry: false })) rejectSymlink(path);
+          writeFileSync(path, bytes);
+          checksums.push(`${createHash('sha256').update(bytes).digest('hex')}  ${filename}\n`);
+          console.log(portablePath(ROOT, path));
+        }
+      }
     }
   }
   if (values.check) {
