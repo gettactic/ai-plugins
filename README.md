@@ -30,6 +30,7 @@ npm ci
 npm run build
 npm test
 npm run check
+npm run validate:cowork
 ```
 
 The build writes deterministic ZIPs and `SHA256SUMS` to ignored `dist/`, and

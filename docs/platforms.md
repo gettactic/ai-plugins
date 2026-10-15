@@ -139,9 +139,9 @@ package build; the hosted MCP must already be available.
 ### Manual internal upload
 
 1. Use an account allowed to upload custom apps in your Microsoft 365 tenant.
-2. In Microsoft 365 admin center, open **Manage apps → Upload custom app**.
-3. Use **… → Add agent** in the upload flow and select the Cowork ZIP.
-4. Complete the tenant's access/assignment controls for the intended colleagues.
+2. In Microsoft 365 admin center, open **Agents → Tools → Registry → Upload**.
+3. Select the Cowork ZIP as built, without extracting and re-zipping a parent folder.
+4. Review its MCP and skill components, scope the intended users/groups, and install.
 5. In Cowork, open **Sources & Skills → Plugins → Discover**, find Tactic,
    and connect your Tactic account.
 
@@ -151,6 +151,19 @@ rejects the schema or does not expose this upload flow, retain the validation
 message and check feature availability with your Microsoft admin.
 
 ### Test before rollout
+
+Check the exact upload archive with `npm run validate:cowork` (or pass another
+archive with `npm run validate:cowork -- /path/to/client-upload.zip`). This reads
+the ZIP itself, validates its manifest, parses each skill's YAML, checks names
+against folders, and prints its SHA-256 checksum. It does not contact Microsoft
+or confirm acceptance by the tenant validator.
+
+If the portal rejects it, retain the original ZIP and the portal's full error
+or validation response, including a correlation ID if supplied. A debugging
+summary claiming missing frontmatter is not enough to diagnose a failure: the
+0.2.1 Cowork archive already contains valid YAML metadata and matching names.
+Do not rename skills, change schema versions, or invent OAuth credentials merely
+to try to clear an unspecified validation error.
 
 - Connect a normal Tactic user and verify tool discovery and a read-only query.
 - Ask for an office-week plan; verify colleague plans, existing reservations,
@@ -178,3 +191,6 @@ all deployment files, so importing with wiqd is not our packaging workflow.
 
 Reference (checked 2026-10-15):
 https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/cowork-plugin-development
+
+The current **Agents → Tools → Registry → Upload** route is documented here:
+https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-plugins-skills-mcp-servers#upload-plugins-or-skills

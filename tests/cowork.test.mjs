@@ -5,11 +5,26 @@ import { join } from 'node:path';
 import Ajv from 'ajv-draft-04';
 import addFormats from 'ajv-formats';
 import sharp from 'sharp';
-import { ROOT, packageFiles } from '../scripts/build.mjs';
+import { ROOT, packageFiles, zipBytes } from '../scripts/build.mjs';
+import { inspectCoworkZip } from '../scripts/validate-cowork.mjs';
 
 const ajv = new Ajv({ strict: false, allErrors: true });
 addFormats(ajv);
 const validate = ajv.compile(JSON.parse(readFileSync(join(ROOT, 'schemas/microsoft-teams-v1.29.json'))));
+
+test('actual Cowork ZIP contains parseable YAML; malformed and mismatched metadata fail', () => {
+  const { files } = packageFiles(ROOT, 'cowork');
+  assert.equal(inspectCoworkZip(zipBytes(files)).skills.length, 2);
+  const path = 'skills/tactic-plan-office-week/SKILL.md';
+  for (const [content, message] of [
+    ['No frontmatter', /Missing YAML frontmatter/],
+    ['---\nname: tactic-plan-office-week\ndescription: invalid: mapping\n---\n', /Invalid YAML/],
+    ['---\nname: other-name\ndescription: Valid text\n---\n', /Skill name must match folder/],
+    ['---\nname: tactic-plan-office-week\ndescription: [not, text]\n---\n', /Description must be/],
+  ]) {
+    assert.throws(() => inspectCoworkZip(zipBytes({ ...files, [path]: Buffer.from(content) })), message);
+  }
+});
 
 test('Cowork package passes Microsoft schema and resolves all skills and icons', () => {
   const { version, files } = packageFiles(ROOT, 'cowork');
