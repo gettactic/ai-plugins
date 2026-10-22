@@ -7,10 +7,19 @@ import addFormats from 'ajv-formats';
 import sharp from 'sharp';
 import { ROOT, packageFiles, zipBytes } from '../scripts/build.mjs';
 import { inspectCoworkZip } from '../scripts/validate-cowork.mjs';
+import { pinTools } from '../scripts/copilot-tools.mjs';
 
 const ajv = new Ajv({ strict: false, allErrors: true });
 addFormats(ajv);
 const validate = ajv.compile(JSON.parse(readFileSync(join(ROOT, 'schemas/microsoft-teams-v1.29.json'))));
+const compileSchema = (name) => {
+  const schema = JSON.parse(readFileSync(join(ROOT, 'schemas', name)));
+  delete schema.$id;
+  delete schema.id;
+  return ajv.compile(schema);
+};
+const validateAgent = compileSchema('declarative-agent-v1.6.json');
+const validatePlugin = compileSchema('copilot-plugin-v2.4.json');
 
 test('actual Cowork ZIP contains parseable YAML; malformed and mismatched metadata fail', () => {
   const { files } = packageFiles(ROOT, 'cowork');
@@ -37,8 +46,10 @@ test('Cowork package passes Microsoft schema and resolves all skills and icons',
   assert.equal(manifest.version, version);
   assert.equal(manifest.manifestVersion, '1.29');
   assert.equal(manifest.id, JSON.parse(readFileSync(join(ROOT, 'platforms/cowork.json'))).id);
+  const plugin = JSON.parse(readFileSync(join(ROOT, 'platforms/copilot-plugin.json')));
   assert.deepEqual(manifest.agentConnectors[0].toolSource.remoteMcpServer, {
     mcpServerUrl: JSON.parse(readFileSync(join(ROOT, 'mcp.json'))).mcpServers.tactic.url,
+    authorization: { type: 'OAuthPluginVault', referenceId: plugin.runtimes[0].auth.reference_id },
   });
   assert.equal(files['plugin.json'], undefined);
   assert.equal(files['mcp.json'], undefined);
@@ -79,4 +90,43 @@ test('Cowork PNGs have Microsoft dimensions and the correct backgrounds', async 
   for (let i = 0; i < outline.length; i += 4) {
     if (outline[i + 3] > 0) assert.deepEqual([...outline.subarray(i, i + 3)], [255, 255, 255]);
   }
+});
+
+test('Copilot Chat agent passes Microsoft schemas and pins every tool with its widget', () => {
+  const { files } = packageFiles(ROOT, 'cowork');
+  const manifest = JSON.parse(files['manifest.json']);
+  const agent = JSON.parse(files['declarativeAgent.json']);
+  const plugin = JSON.parse(files['ai-plugin.json']);
+  assert.ok(validateAgent(agent), JSON.stringify(validateAgent.errors, null, 2));
+  assert.ok(validatePlugin(plugin), JSON.stringify(validatePlugin.errors, null, 2));
+  assert.deepEqual(manifest.copilotAgents.declarativeAgents, [{ id: 'tacticAgent', file: 'declarativeAgent.json' }]);
+  assert.deepEqual(agent.actions.map(({ file }) => file), ['ai-plugin.json']);
+  assert.ok(agent.instructions.length <= 8000);
+
+  const [runtime] = plugin.runtimes;
+  const tools = runtime.spec.mcp_tool_description.tools;
+  assert.deepEqual(runtime.run_for_functions, tools.map(({ name }) => name));
+  assert.deepEqual(plugin.functions.map(({ name }) => name), runtime.run_for_functions);
+  for (const tool of tools.filter(({ name }) => name.startsWith('show_'))) {
+    assert.match(tool._meta?.ui?.resourceUri ?? '', /^ui:\/\/tactic\//, `${tool.name} needs its widget binding`);
+  }
+});
+
+test('pinTools keeps the widget binding and drops widget-only tools', () => {
+  const plugin = { runtimes: [{ type: 'RemoteMCPServer', spec: { url: 'https://example.com/mcp' } }] };
+  const pinned = pinTools(plugin, [
+    {
+      name: 'show_card',
+      description: 'Shows a card.',
+      inputSchema: { $schema: 'x', type: 'object', properties: { a: { $id: 'y', type: 'string' } } },
+      _meta: { ui: { resourceUri: 'ui://tactic/show_card.html' }, securitySchemes: [] },
+    },
+    { name: 'get_workplace_request_upload_url', description: 'Widget only.' },
+    { name: 'get_users_working_locations_at_week', description: 'Gets locations.' },
+  ]);
+  const [card, locations] = pinned.runtimes[0].spec.mcp_tool_description.tools;
+  assert.deepEqual(pinned.runtimes[0].run_for_functions, ['show_card', 'get_users_working_locations_at_week']);
+  assert.deepEqual(card.inputSchema, { type: 'object', properties: { a: { type: 'string' } } });
+  assert.deepEqual(card._meta, { ui: { resourceUri: 'ui://tactic/show_card.html' } });
+  assert.match(locations.description, /^Gets the reservations .*Gets locations\.$/);
 });

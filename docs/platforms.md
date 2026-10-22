@@ -117,7 +117,8 @@ Build with `npm run build` and upload `dist/tactic-cowork-<version>.zip`.
 The Node pipeline assembles Microsoft's documented app package directly; no
 Microsoft CLI, sign-in, tenant provisioning, or solution export is needed to
 create the ZIP. It contains a v1.29 unified app manifest, two correctly sized
-icons, the shared skills and references, and a remote MCP connector.
+icons, the shared skills and references, a remote MCP connector, and a Copilot
+Chat declarative agent (`declarativeAgent.json` with its `ai-plugin.json`).
 
 `platforms/cowork.json` stores the app's permanent ID and presentation metadata.
 Keep that ID for updates. The Cowork app version also lives in that file and must
@@ -126,17 +127,39 @@ the other hosts' plugin versions. The builder takes the connector description
 from `plugin.json`, the server URL from `mcp.json`, and skill folders from `skills/`.
 Bump the Cowork app version before uploading an update to an installed app.
 
-Authentication uses Cowork's automatic OAuth Dynamic Client Registration (DCR).
-The connector deliberately omits `authorization`; do not replace it with
-`{ "type": "None" }` or a placeholder vault reference. Each user connects their
-own Tactic account. This DCR package targets **Cowork**, not Copilot Chat or
-Copilot Studio. Copilot Chat requires a separately configured OAuthPluginVault
-registration. Studio uses its MCP onboarding or Power Platform solution flow.
+Authentication uses an OAuthPluginVault registration from the Teams Developer
+Portal, because Copilot Chat does not support Dynamic Client Registration. Its
+`reference_id` lives in `platforms/copilot-plugin.json`; the builder copies it to
+the connector so both use the same sign-in. Each user connects their own Tactic
+account. Do not replace it with `{ "type": "None" }` or a placeholder reference.
+Studio uses its MCP onboarding or Power Platform solution flow.
 
-Manifest 1.29 allows dynamic tool discovery without a packaged
-`mcpToolDescription` file. Do not downgrade to 1.28 without adding the tool
-metadata required by that version. No backend deployment is performed by the
-package build; the hosted MCP must already be available.
+No backend deployment is performed by the package build; the hosted MCP must
+already be available.
+
+### Copilot Chat agent
+
+`platforms/copilot-agent.json` holds the agent's instructions and conversation
+starters, and `platforms/copilot-plugin.json` the MCP runtime with the tools
+pinned from the server. Copilot Chat selects tools from these pinned copies, so:
+
+- Instructions start with a rule to always call Tactic in the same turn;
+  otherwise Copilot often answers that the data isn't available.
+- Each `show_*` tool keeps `_meta.ui.resourceUri`. Without it Copilot calls the
+  tool but never renders its card.
+- Copilot ignores description text beyond 1,024 characters.
+
+When the server's tools change, save a `tools/list` response from
+`https://ai.gettactic.com/mcp` and refresh the pinned tools, then bump the app
+version and rebuild:
+
+```sh
+npm run tools:copilot -- /path/to/tools-list.json
+```
+
+Users first connect Tactic in Copilot **Settings → Sources**; the agent then asks
+them to sign in once more in the chat. Open the agent directly: mentioning
+`@Tactic` from another chat behaves less reliably.
 
 ### Manual internal upload
 
@@ -172,13 +195,13 @@ Run Microsoft's package validator as well as local checks before distributing:
 
 ```sh
 npx --yes --package=@microsoft/m365agentstoolkit-cli@1.1.18 atk validate \
-  --package-file dist/tactic-cowork-1.0.0.zip \
+  --package-file dist/tactic-cowork-1.0.6.zip \
   --validate-method validation-rules --interactive false --telemetry false
 ```
 
 These are the flags exposed by CLI 1.1.18; some Learn examples use older flag
-names. On 2026-10-15, this command returned **59 passed** for the 1.0.0 ZIP with
-SHA-256 `34cf235a7ec09aeaed9f996f045d559475c8fdd9ed73097c4ad4be8f407f2889`.
+names. On 2026-10-22, this command returned **59 passed** for the 1.0.6 ZIP with
+SHA-256 `85434d1801f4ca89a4fc7dc09c4cdfac52d3426797647fd2886d0d68e6784b0a`.
 This is Microsoft package-rule validation, not a tenant installation, OAuth,
 skill activation, or runtime test. Update the filename when releasing a new version.
 
@@ -192,8 +215,8 @@ to try to clear an unspecified validation error.
 - Verify a colleague signs in with their own account and sees only permitted data.
 - Test a confirmed booking in a test workspace and confirm cancellation/cleanup.
 
-`npm test` checks the manifest against a vendored copy of Microsoft's 1.29
-schema, skill references, icon dimensions/backgrounds, and deterministic ZIPs.
+`npm test` checks the manifest, agent and plugin against vendored copies of
+Microsoft's 1.29, declarative agent 1.6 and plugin 2.4 schemas, skill references, icon dimensions/backgrounds, and deterministic ZIPs.
 `npm run check` detects generated-file drift. These are local checks, not
 Microsoft upload certification or proof that OAuth works in Cowork. The first
 tenant upload and authenticated smoke test remain necessary.
@@ -205,8 +228,7 @@ Regenerate them with `npm run icons:cowork`, then `npm run build`.
 
 Microsoft also documents `atk import openplugin` for one-off Claude conversions.
 It generates a preview manifest and placeholder OAuth registration references;
-our pipeline avoids those placeholders by generating the documented Cowork DCR
-configuration. The guide warns that `wiqd plugin import` does not yet scaffold
+our pipeline avoids those placeholders by using our real vault registration. The guide warns that `wiqd plugin import` does not yet scaffold
 all deployment files, so importing with wiqd is not our packaging workflow.
 
 Reference (checked 2026-10-15):

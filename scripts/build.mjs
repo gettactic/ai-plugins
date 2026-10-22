@@ -105,13 +105,27 @@ export function packageFiles(root, target) {
     if (!/^[1-9]\d*\.\d+\.\d+$/.test(cowork.version ?? '')) {
       throw new Error('Cowork requires a three-part numeric app version with major version at least 1');
     }
+    // Copilot Chat can't use DCR: the agent and the connector sign in through the same
+    // OAuthPluginVault registration from the Teams Developer Portal.
+    const plugin = readJson(root, 'platforms/copilot-plugin.json');
+    const runtime = plugin.runtimes.find(({ type }) => type === 'RemoteMCPServer');
+    if (runtime?.spec.url !== server.url) throw new Error('platforms/copilot-plugin.json must use the mcp.json server URL');
+    if (runtime.auth?.type !== 'OAuthPluginVault' || !runtime.auth.reference_id) {
+      throw new Error('platforms/copilot-plugin.json needs an OAuthPluginVault reference_id');
+    }
     cowork.agentSkills = skillNames.map((name) => ({ folder: `./skills/${name}` }));
-    // Omit authorization so Cowork discovers OAuth and registers its own client.
-    // Explicit type None would mean anonymous access, not DCR.
     cowork.agentConnectors = [{
       id: 'tactic', displayName: 'Tactic', description: manifest.description,
-      toolSource: { remoteMcpServer: { mcpServerUrl: server.url } },
+      toolSource: {
+        remoteMcpServer: {
+          mcpServerUrl: server.url,
+          authorization: { type: 'OAuthPluginVault', referenceId: runtime.auth.reference_id },
+        },
+      },
     }];
+    cowork.copilotAgents = { declarativeAgents: [{ id: 'tacticAgent', file: 'declarativeAgent.json' }] };
+    files['declarativeAgent.json'] = jsonBytes(readJson(root, 'platforms/copilot-agent.json'));
+    files['ai-plugin.json'] = jsonBytes(plugin);
     delete files['README.md'];
     delete files.LICENSE;
     delete files['assets/icon.png'];

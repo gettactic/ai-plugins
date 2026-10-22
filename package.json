@@ -11,7 +11,8 @@
     "check": "node scripts/build.mjs --check",
     "test": "node --test",
     "icons:cowork": "node scripts/cowork-icons.mjs",
-    "validate:cowork": "node scripts/validate-cowork.mjs"
+    "validate:cowork": "node scripts/validate-cowork.mjs",
+    "tools:copilot": "node scripts/copilot-tools.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",

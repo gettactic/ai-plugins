@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.29/MicrosoftTeams.schema.json",
   "manifestVersion": "1.29",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "id": "84883618-f0fc-425e-8546-7e0a79d1c553",
   "developer": {
     "name": "Tactic",
@@ -37,9 +37,21 @@
       "description": "Plan office days and review workplace utilization with Tactic skills and the hosted MCP connector.",
       "toolSource": {
         "remoteMcpServer": {
-          "mcpServerUrl": "https://ai.gettactic.com/mcp"
+          "mcpServerUrl": "https://ai.gettactic.com/mcp",
+          "authorization": {
+            "type": "OAuthPluginVault",
+            "referenceId": "MDg1ZTg4ZGUtZWRiMS00Y2E3LTkwZDgtNGRmOTAxNGRiYzkyIyM2NDk4OWMxNy04YjkzLTRkYzYtOTQ0NC1hNmU0Zjk0MDY5ODg="
+          }
         }
       }
     }
-  ]
+  ],
+  "copilotAgents": {
+    "declarativeAgents": [
+      {
+        "id": "tacticAgent",
+        "file": "declarativeAgent.json"
+      }
+    ]
+  }
 }
