@@ -1,0 +1,2124 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.4/schema.json",
+  "schema_version": "v2.4",
+  "name_for_human": "Tactic",
+  "namespace": "tactic",
+  "description_for_human": "Plan office days, book desks and rooms, and review workplace utilization.",
+  "description_for_model": "Tactic is the user's workplace management system and the only source of their workplace data. Always call Tactic in the current turn for any question about: the user's or colleagues' reservations and bookings, desks, meeting rooms, parking, offices and floors, who is in the office, working locations, check-in and check-out, visitors, workplace requests and workplace utilization reports. Never answer these from memory and never say the data is not available without calling Tactic first.",
+  "privacy_policy_url": "https://gettactic.com/privacy/policy",
+  "legal_info_url": "https://gettactic.com/terms",
+  "functions": [
+    {
+      "name": "build_report_query",
+      "description": "Answers workplace analytics questions (reservations, occupancy, check-in rate, missed check-ins, room hours, workplace requests filed or resolved, time to resolve) over a period, optionally broken down by up to two dimensions and filtered. Measures, dimensions and member IDs are listed in the Reports section of your instructions; if that section is missing, tell the user reports are not enabled for them. Returns the total, the top rows and a short series; then reply with response_type report_result carrying the same query. Examples:\n- \"How busy were the desks last month?\" -> {\"measure\": \"occupancy\", \"filters\": [{\"dimension\": \"resource_type\", \"in\": [\"desk\"]}], \"period\": {\"preset\": \"last_30_days\"}, \"compare\": \"previous_period\"}\n- \"Which team books the most rooms?\" -> {\"measure\": \"reservations\", \"breakdown\": [\"team\"], \"filters\": [{\"dimension\": \"resource_type\", \"in\": [\"meeting_room\"]}], \"period\": {\"preset\": \"last_90_days\"}}\n- \"Requests by category in Lisbon this year\" -> {\"measure\": \"requests\", \"breakdown\": [\"category\"], \"filters\": [{\"dimension\": \"office\", \"in\": [\"<lisbon office id>\"]}], \"period\": {\"preset\": \"year_to_date\"}}"
+    },
+    {
+      "name": "cancel_reservation",
+      "description": "Cancels a reservation of the current user. Ask for confirmation first. For a recurring reservation, set recurring to cancel the whole series."
+    },
+    {
+      "name": "check_in",
+      "description": "Checks the current user in to one of their reservations, to confirm they are using it."
+    },
+    {
+      "name": "check_out",
+      "description": "Checks the current user out of one of their reservations, releasing it."
+    },
+    {
+      "name": "create_reservation",
+      "description": "Reserves a resource (desk, meeting room, parking...) for the current user or other users. Show the proposal with `show_reservation_info` and only call this tool once the user confirmed it. The resource ID must come from `find_available_resources`. Times are in the office's local time."
+    },
+    {
+      "name": "create_visit",
+      "description": "Invites a visitor to an office; they get an email with a check-in code. Show the invitation first with `show_visit_info` and only call this tool once the user confirmed it. A host needs a visitor type, and a visitor type that requires a host needs one."
+    },
+    {
+      "name": "create_workplace_request",
+      "description": "Creates a workplace request. Show it first with `show_workplace_request_info` and only call this tool once the user confirmed it. The type ID must come from `list_workplace_request_types`."
+    },
+    {
+      "name": "find_available_resources",
+      "description": "Returns a list of resources available to make a reservation at the given start and end times for the given users.\n- If user requests a specific resource name, use this tool to find it because not all resources are returned by default.\n- Resources are returned in the order of priority, the ones with the highest priority are returned first, use them first.\n- This tool will return permission errors if the user does not have permission to create the requested reservation.\n- To only find resources on a floor or in a zone the user names, pass floor_id or zone_id from list_office_places.\n- Only the top 5 resources are returned; total says how many are available in all. Use total for \"how many desks are free\" questions. To list every available resource (with its floor), e.g. for a full list or a CSV, pass all: true.\n\nExample responses:\n- Example 1, available desk and room, prefer the desk:\n\t- {\"resources\":[{\"id\": \"reso_cafb552b-e49a-4035-b7d9-518875e3d342\", \"name\": \"Desk 1\", \"type\": \"desk\"},{\"id\": \"reso_fbaaaf6b-6d03-4a20-b585-580970abeb41\", \"name\": \"Meeting Room 2\", \"type\": \"meeting_room\"}],\"total\":2}\n- Example 2, available room and desk, prefer the room:\n\t- {\"resources\":[{\"id\": \"reso_7d38458b-c1dc-4b47-aa14-51d2050508c5\", \"name\": \"Meeting Room 1\", \"type\": \"meeting_room\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Desk 2\", \"type\": \"desk\"}]}\n- Example 3, two available rooms, only one has an online meeting provider available:\n\t- {\"resources\":[{\"id\": \"reso_7d38458b-c1dc-4b47-aa14-51d2050508c5\", \"name\": \"Meeting Room 1\", \"type\": \"meeting_room\", \"online_meeting_provider\": \"teams_for_business\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Meeting Room 2\", \"type\": \"meeting_room\"}]}\n- Example 4, all: true, every available desk with its floor:\n\t- {\"resources\":[{\"id\": \"reso_cafb552b-e49a-4035-b7d9-518875e3d342\", \"name\": \"Desk 1\", \"type\": \"desk\", \"floor\": \"Floor 2\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Desk 2\", \"type\": \"desk\", \"floor\": \"Floor 2\"}],\"total\":2}\n- When no available resources are found, the response is an empty list: {\"resources\":[],\"total\":0}\n\nExample responses for permission errors:\n- Example 1, user cannot create reservations on behalf of others, only for himself:\n  - {\"permission_error\":\"user does not have permission to create reservations for others\"}\n- Example 2, user cannot create reservations in the past:\n  - {\"permission_error\":\"user is not allowed to create reservations in the past\"}\n- Example 3, office does not allow creating recurring reservations for resources of type desk:\n  - {\"permission_error\":\"office does not allow creating recurring reservations for resources of type desk\"}\n- Example 4, user cannot create reservations for the requested users:\n  - {\"permission_error\":\"user does not have permission to create reservations for the requested users\"}"
+    },
+    {
+      "name": "find_teams",
+      "description": "Finds teams by name. It returns a list with all found teams and their users. Example:\n- {\"teams\":[{\"id\": \"team_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Team 1\", \"users\": [{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}, {\"id\": \"team_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Team 2\", \"users\": [{\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}, {\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}]}]}"
+    },
+    {
+      "name": "find_users",
+      "description": "Finds users by email addresses or names. It returns a list with all users found. When looking up by name it may return multiple users that match the name, ask the user for clarification if needed.\nExamples:\n- Example 1 (found both users by email):\n\t- Input: [\"cason.conway@example.com\", \"arturo.mckee@example.com\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}\n- Example 2 (\"cason\" and \"arturo.mckee@example.com\" are not found):\n\t- Input: [\"cason\", \"arturo.mckee@example.com\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}\n- Example 3 (\"cason\" refers to multiple users, \"arturo\" is not found):\n\t- Input: [\"cason\", \"arturo\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Cason McKee\", \"email\": \"cason.mckee@example.com\"}]}"
+    },
+    {
+      "name": "get_current_date_time",
+      "description": "Get current date, time, week and year at the user's location"
+    },
+    {
+      "name": "get_current_user_context",
+      "description": "Returns who the current user is (name, email, ID, timezone), the people they interact with the most, their default office and the other offices they can use with their default reservation times. Call it before anything that refers to the current user (\"me\", \"my\", \"I\") or to their offices."
+    },
+    {
+      "name": "get_date_time",
+      "description": "Get date, time, week and year at the user's location adding or subtracting the given number of days, weeks, months or years. Examples:\n- \"tomorrow\" -> {\"in_n_days\": 1, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"in two days\" -> {\"in_n_days\": 2, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"next week\" -> {\"in_n_days\": 0, \"in_n_weeks\": 1, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"next wednesday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"next_day_of_week\": \"wednesday\"}\n- \"tuesday next week\" -> {\"in_n_days\": 0, \"in_n_weeks\": 1, \"in_n_months\": 0, \"in_n_years\": 0, \"next_day_of_week\": \"tuesday\"}\n- \"next month\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 1, \"in_n_years\": 0}\n- \"next year\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 1}\n- \"yesterday\" -> {\"in_n_days\": -1, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous monday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"monday\"}\n- \"last tuesday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"tuesday\"}\n- \"tuesday last week\" -> {\"in_n_days\": 0, \"in_n_weeks\": -1, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"tuesday\"}\n- \"two days ago\" -> {\"in_n_days\": -2, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous week\" -> {\"in_n_days\": 0, \"in_n_weeks\": -1, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous month\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": -1, \"in_n_years\": 0}"
+    },
+    {
+      "name": "get_floor_occupancy",
+      "description": "Gets who is booked in an office on a day, grouped by floor: each person with the resource (desk, meeting room, parking...), their times and whether they checked in. Private reservations show no person. Pass resource_id (e.g. the desk the user booked that day, from get_users_working_locations_at_week) to only get the people on that floor, or floor_id or zone_id from list_office_places for a floor or zone the user names. Use it for \"who's near me\", \"who's on my floor\" or \"who's sitting next to ...\" questions. Example:\n- {\"office\":\"Lisbon HQ\",\"date\":\"2026-10-02\",\"total\":2,\"floors\":[{\"id\":\"reso_...\",\"name\":\"Floor 2\",\"occupants\":[{\"resource\":{\"id\":\"reso_...\",\"name\":\"Desk 12\",\"resource_type\":\"desk\"},\"user\":{\"id\":\"user_...\",\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\"},\"start\":\"2026-10-02T09:00:00\",\"end\":\"2026-10-02T17:00:00\",\"checked_in\":true},{\"resource\":{\"id\":\"reso_...\",\"name\":\"Desk 14\",\"resource_type\":\"desk\"},\"user\":\"private reservation\",\"start\":\"2026-10-02T09:00:00\",\"end\":\"2026-10-02T17:00:00\",\"checked_in\":false}]}]}"
+    },
+    {
+      "name": "get_my_workplace_requests",
+      "description": "Lists the workplace requests the current user submitted, newest first, with their status, priority, who they are assigned to and when they were last updated. Use it when the user asks about their requests, e.g. \"what happened to my monitor request?\" (search \"monitor\"), \"do I have open requests?\". Then show them with show_workplace_requests.\nExample response: {\"requests\":[{\"id\":\"0190a000-0000-7000-8000-0000000000aa\",\"number\":3073,\"title\":\"Broken monitor\",\"type\":\"IT\",\"status\":\"In progress\",\"base_status\":\"open\",\"priority\":\"medium\",\"office\":\"Lisbon HQ\",\"location\":\"Desk 187\",\"assigned_to\":\"Ana Silva\",\"created\":\"2026-10-01 09:12\",\"updated\":\"2026-10-02 10:30\",\"url\":\"https://...\"}],\"total\":1}"
+    },
+    {
+      "name": "get_users_in_office_at_week",
+      "description": "Gets users that are in the given office at the week containing the given date. If the user is not in the results, it means it's not in the office at the given week. It returns a map of user IDs with their working location data *at each day* of the given week. Examples:\n- \"user1@example.com\" is in the office on 2024-08-12 and remote on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"remote\",\"user_email\":\"user1@example.com\"}}}\n- \"user1@example.com\" is has a reservation on 2024-08-12 and user2@example.com is not in the office on 2024-08-12: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}, \"user_b84bed39-3e4f-4096-9c9b-8b29a0605f73\":{\"2024-08-12\":{\"location\":\"remote\",\"user_email\":\"user2@example.com\"}}}\n- \"user1@example.com\" is in the office on 2024-08-12 and 2024-08-13 and also has a reservation on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}}"
+    },
+    {
+      "name": "get_users_working_locations_at_week",
+      "description": "Gets the reservations (desk, room and parking bookings) and working locations of one or more users for a week. Use it for \"my reservations\", \"my bookings\", \"what have I booked\", \"when am I in the office\" and \"where are my colleagues this week\". Gets users working locations by email addresses at the week containing the given date. It returns a map of user IDs with their working location data for the given week. This tool should also be used to know if users have reservations at the given week. Examples:\n- \"user1@example.com\" is in the office on 2024-08-12 and remote on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"remote\",\"user_email\":\"user1@example.com\"}}}\n- \"user1@example.com\" is has a reservation on 2024-08-12 and user2@example.com is not in the office on 2024-08-12: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}, \"user_b84bed39-3e4f-4096-9c9b-8b29a0605f73\":{\"2024-08-12\":{\"location\":\"remote\",\"user_email\":\"user2@example.com\"}}}\n- \"user1@example.com\" is in the office on 2024-08-12 and 2024-08-13 and also has a reservation on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}}"
+    },
+    {
+      "name": "get_workplace_request",
+      "description": "Gets one workplace request by its ID or number (e.g. 3073) with its activity: comments and changes (status, assignee, priority...) oldest first. Use it to explain where a request stands and what happened to it. Then show it with show_workplace_requests."
+    },
+    {
+      "name": "get_workplace_requests_summary",
+      "description": "For people who manage workplace requests: summarizes the unresolved (open and pending) requests they manage, optionally for one office. Returns the counts by status, type, office and floor, how many are unassigned, the high priority ones and the oldest ones. Use it for \"what should my team work on first?\", \"summarize open requests by floor\". Suggest priorities from high priority, age, unassigned requests and where they pile up. If there are none, the user doesn't manage any open requests."
+    },
+    {
+      "name": "list_office_places",
+      "description": "Lists the floors and zones of an office with their IDs. Zones are parts of the floor plans such as a team's area (\"Engineering\"), a quiet area or a single room; a zone covers everything drawn inside it, smaller zones included, plus its sub-zones, and can span floors. Use it when the user names a floor or a zone, then pass its ID as floor_id or zone_id to find_available_resources or get_floor_occupancy. Match the user's words to the names (e.g. \"floor 2\", \"second floor\" -> \"Floor 2\"); if nothing matches, say which floors and zones there are. Example:\n- {\"office\":\"Lisbon HQ\",\"floors\":[{\"id\":\"reso_...\",\"name\":\"Floor 1\"},{\"id\":\"reso_...\",\"name\":\"Floor 2\"}],\"zones\":[{\"id\":\"zone_...\",\"name\":\"Engineering\",\"desks\":24,\"meeting_rooms\":2},{\"id\":\"zone_...\",\"name\":\"Platform team\",\"parent\":\"Engineering\",\"desks\":8,\"meeting_rooms\":0}]}"
+    },
+    {
+      "name": "list_offices",
+      "description": "Lists the offices the user can use with their IDs, by name, optionally only the ones matching a query (name, city, state or country). Use it when the user names an office that isn't in their context, e.g. \"book a desk in Madrid\", or asks which offices there are. total is how many match; only the first 200 are listed. Example:\n- {\"offices\":[{\"id\":\"offi_...\",\"name\":\"Madrid Castellana\",\"city\":\"Madrid\",\"country\":\"Spain\",\"timezone\":\"Europe/Madrid\"}],\"total\":1}"
+    },
+    {
+      "name": "list_report_boards",
+      "description": "Lists the user's report boards (default boards and their own) with the questions on each. Use it to answer what is on a board, or to find where to save a report."
+    },
+    {
+      "name": "list_workplace_request_types",
+      "description": "Lists the types of workplace requests (e.g. broken equipment, cleaning, catering) the user can create, with their IDs and when to use each one."
+    },
+    {
+      "name": "move_reservation",
+      "description": "Moves a reservation of the current user to another resource and/or time, keeping its attendees. Show the change first with `show_reservation_change` and only call this tool once the user confirmed it. The resource ID must come from `find_available_resources`. Times are in the office's local time."
+    },
+    {
+      "name": "release_reservations",
+      "description": "Releases reservations of the current user for a day, e.g. when they are sick or not coming in, and optionally their dedicated desk that day. Show them first with `show_release_reservations` and only call this tool once the user confirmed it."
+    },
+    {
+      "name": "report_outlook",
+      "description": "Looks ahead: how busy each office is expected to be on the next ten working days (today included), from what is booked already and how days of that weekday usually fill up. Use it for questions about the coming days or weeks: \"how busy will next Tuesday be\", \"is Wednesday going to be full\", \"when is the quietest day to come in\", \"is there room for my team on Thursday\". Returns, per office and day, what is booked so far, where the day is heading (expected), the inventory, the expected share in percent, what a usual such day ends at, and how sure the forecast is. Answer in words with the expected number and share against the inventory; say when confidence is low. Never use build_report_query for the future, it only looks back."
+    },
+    {
+      "name": "save_report_to_board",
+      "description": "Pins a report query on one of the user's boards when they ask to save, pin or add a report to a board. Use the exact query that build_report_query ran. Match board_name to one of their editable boards from list_report_boards; if none matches, a new private board with that name is created. Confirm what was saved and where."
+    },
+    {
+      "name": "search_offices_documents",
+      "description": "Searches for information linked to offices documents. If the user asks for information about policies, procedures, events or anything else you don't have information about, use this tool to try to find relevant information.\n- The tool does semantic search, use expressive queries to find relevant information.\n- It returns a map of office ids with the information found for each one.\n- If nothing was found for a specific office, it will not be included in the response.\n- Example responses:\n  - Found information for \"Main Office\" but not for \"Main Office 2\": {\"offices_information\":{\"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}, \"results\": [\"The office is located in the main building on the 10th floor.\"]}}}\n  - Found information for \"Main Office\" and \"Main Office 2\": {\"offices_information\":{\"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}, \"results\": [\"The office has a gym and a parking lot open to the public.\"]}, \"offi_3b168e50-4dc0-44eb-97d3-010207c4c752\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c752\", \"name\": \"Main Office 2\"}, \"results\": [\"The office has a gym and a parking lot open to the public.\"]}}}"
+    },
+    {
+      "name": "show_floor_map",
+      "description": "Shows the map of a floor on a day to the user: who is booked where, which desks are still free and who is in. Use it when the user wants to see a floor or the office, e.g. \"show me floor 2 today\". Get the floor ID from `list_office_places`."
+    },
+    {
+      "name": "show_release_reservations",
+      "description": "Shows the current user's reservations for a day as a card they can release, e.g. when they are sick or not coming in. Get the schedule IDs with `get_users_working_locations_at_week`: desks and parking, meeting rooms only when the user asks. The card also offers to release the user's dedicated desk that day. Showing the card releases nothing: it happens when the user confirms in the card or when you call `release_reservations`."
+    },
+    {
+      "name": "show_report",
+      "description": "Shows a report as a chart, table or floor map after answering an analytics question with `build_report_query`. Pass the exact query the tool ran so the report can be drawn; the summary gives the key numbers."
+    },
+    {
+      "name": "show_reservation_change",
+      "description": "Shows an existing reservation moved to another resource and/or time as a card the user can confirm. Get the schedule ID with `get_users_working_locations_at_week` and a new resource with `find_available_resources`. Showing the card changes nothing: it happens when the user confirms in the card or when you call `move_reservation`."
+    },
+    {
+      "name": "show_reservation_info",
+      "description": "Shows proposed reservations to the user as a card they can confirm, including recurring reservations and workplace requests associated to them. Use it after finding resources with `find_available_resources`. Showing the card does not create the reservations: they are created when the user confirms them in the card or when you call `create_reservation`. Only use it with at least one reservation to show, and not for reservations already made (use `show_users_working_locations` for those)."
+    },
+    {
+      "name": "show_users_working_locations",
+      "description": "Shows the working locations of users to the user. Use it after getting working locations with any tool to present the result, including the location of the current user or other users and details about existing reservations. If none of the users have a working location, do not use this tool."
+    },
+    {
+      "name": "show_visit_info",
+      "description": "Shows a visitor invitation to the user as a form they can review and send. Showing it does not invite the visitor: they are invited when the user sends the form or when you call `create_visit`, and then get an email with a check-in code."
+    },
+    {
+      "name": "show_visits",
+      "description": "Shows the visitors expected or visiting on a day to the user, after getting them with `get_visits`."
+    },
+    {
+      "name": "show_workplace_request_info",
+      "description": "Shows a proposed workplace request to the user as a form they can review and submit. Showing it does not create the request: it is created when the user submits the form or when you call `create_workplace_request`."
+    },
+    {
+      "name": "show_workplace_requests",
+      "description": "Shows existing workplace requests to the user: their status, who they are assigned to and the last update, with the comments and changes when a single request is shown. Use it after `get_my_workplace_requests`, `get_workplace_request` or `get_workplace_requests_summary`, passing the request IDs (not numbers) in the order to show them."
+    }
+  ],
+  "runtimes": [
+    {
+      "type": "RemoteMCPServer",
+      "auth": {
+        "type": "OAuthPluginVault",
+        "reference_id": "MDg1ZTg4ZGUtZWRiMS00Y2E3LTkwZDgtNGRmOTAxNGRiYzkyIyM2NDk4OWMxNy04YjkzLTRkYzYtOTQ0NC1hNmU0Zjk0MDY5ODg="
+      },
+      "spec": {
+        "url": "https://ai.gettactic.com/mcp",
+        "mcp_tool_description": {
+          "tools": [
+            {
+              "name": "build_report_query",
+              "description": "Answers workplace analytics questions (reservations, occupancy, check-in rate, missed check-ins, room hours, workplace requests filed or resolved, time to resolve) over a period, optionally broken down by up to two dimensions and filtered. Measures, dimensions and member IDs are listed in the Reports section of your instructions; if that section is missing, tell the user reports are not enabled for them. Returns the total, the top rows and a short series; then reply with response_type report_result carrying the same query. Examples:\n- \"How busy were the desks last month?\" -> {\"measure\": \"occupancy\", \"filters\": [{\"dimension\": \"resource_type\", \"in\": [\"desk\"]}], \"period\": {\"preset\": \"last_30_days\"}, \"compare\": \"previous_period\"}\n- \"Which team books the most rooms?\" -> {\"measure\": \"reservations\", \"breakdown\": [\"team\"], \"filters\": [{\"dimension\": \"resource_type\", \"in\": [\"meeting_room\"]}], \"period\": {\"preset\": \"last_90_days\"}}\n- \"Requests by category in Lisbon this year\" -> {\"measure\": \"requests\", \"breakdown\": [\"category\"], \"filters\": [{\"dimension\": \"office\", \"in\": [\"<lisbon office id>\"]}], \"period\": {\"preset\": \"year_to_date\"}}",
+              "inputSchema": {
+                "$defs": {
+                  "ReportFilterArgs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dimension": {
+                        "description": "Dimension key: office",
+                        "type": "string"
+                      },
+                      "in": {
+                        "description": "Member IDs to keep (never names; IDs come from the reporting section of your instructions). For status",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "dimension",
+                      "in"
+                    ],
+                    "type": "object"
+                  },
+                  "ReportPeriodArgs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "from": {
+                        "description": "First day (inclusive) for a custom period",
+                        "format": "date",
+                        "type": "string"
+                      },
+                      "grain": {
+                        "description": "Time bucket for the trend; omit to let the period decide",
+                        "enum": [
+                          "day",
+                          "week",
+                          "month"
+                        ],
+                        "type": "string"
+                      },
+                      "preset": {
+                        "description": "Period preset; use custom with from and to for anything else",
+                        "enum": [
+                          "last_7_days",
+                          "last_30_days",
+                          "last_90_days",
+                          "year_to_date",
+                          "custom"
+                        ],
+                        "type": "string"
+                      },
+                      "to": {
+                        "description": "Last day (inclusive) for a custom period",
+                        "format": "date",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "preset"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Answers workplace analytics questions (reservations, occupancy, check-in rate, missed check-ins, room hours, workplace requests filed or resolved, time to resolve) over a period, optionally broken down by up to two dimensions and filtered. Measures, dimensions and member IDs are listed in the Reports section of your instructions; if that section is missing, tell the user reports are not enabled for them. Returns the total, the top rows and a short series; then reply with response_type report_result carrying the same query. Examples:\n- \"How busy were the desks last month?\" -> {\"measure\": \"occupancy\", \"filters\": [{\"dimension\": \"resource_type\", \"in\": [\"desk\"]}], \"period\": {\"preset\": \"last_30_days\"}, \"compare\": \"previous_period\"}\n- \"Which team books the most rooms?\" -> {\"measure\": \"reservations\", \"breakdown\": [\"team\"], \"filters\": [{\"dimension\": \"resource_type\", \"in\": [\"meeting_room\"]}], \"period\": {\"preset\": \"last_90_days\"}}\n- \"Requests by category in Lisbon this year\" -> {\"measure\": \"requests\", \"breakdown\": [\"category\"], \"filters\": [{\"dimension\": \"office\", \"in\": [\"<lisbon office id>\"]}], \"period\": {\"preset\": \"year_to_date\"}}",
+                "properties": {
+                  "breakdown": {
+                    "description": "Up to two dimension keys to group by (office",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "compare": {
+                    "description": "previous_period to compare with the period before",
+                    "enum": [
+                      "previous_period",
+                      "same_period_last_year"
+                    ],
+                    "type": "string"
+                  },
+                  "filters": {
+                    "description": "Dimension filters",
+                    "items": {
+                      "$ref": "#/$defs/ReportFilterArgs"
+                    },
+                    "type": "array"
+                  },
+                  "measure": {
+                    "description": "Measure key; desks counts the inventory as it stands (by access_mode",
+                    "enum": [
+                      "requests",
+                      "resolved",
+                      "time_to_resolve",
+                      "reservations",
+                      "occupancy",
+                      "checkin_rate",
+                      "no_shows",
+                      "room_hours",
+                      "participants",
+                      "desks",
+                      "visits",
+                      "invitations",
+                      "deliveries",
+                      "remote_days",
+                      "vacation_days",
+                      "new_users",
+                      "space_area",
+                      "area_per_desk"
+                    ],
+                    "type": "string"
+                  },
+                  "period": {
+                    "$ref": "#/$defs/ReportPeriodArgs",
+                    "description": "Period to report on"
+                  },
+                  "with": {
+                    "description": "A second measure drawn beside the first over the same breakdown",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "measure",
+                  "period"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "cancel_reservation",
+              "description": "Cancels a reservation of the current user. Ask for confirmation first. For a recurring reservation, set recurring to cancel the whole series.",
+              "inputSchema": {
+                "properties": {
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "ID of the reservation to cancel"
+                  },
+                  "recurring": {
+                    "type": "boolean",
+                    "description": "Cancel every occurrence of a recurring reservation"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "schedule_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": true,
+                "openWorldHint": false,
+                "title": "Cancel reservation",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "check_in",
+              "description": "Checks the current user in to one of their reservations, to confirm they are using it.",
+              "inputSchema": {
+                "properties": {
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "ID of the reservation"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "schedule_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Check in",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "check_out",
+              "description": "Checks the current user out of one of their reservations, releasing it.",
+              "inputSchema": {
+                "properties": {
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "ID of the reservation"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "schedule_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": true,
+                "openWorldHint": false,
+                "title": "Check out",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "create_reservation",
+              "description": "Reserves a resource (desk, meeting room, parking...) for the current user or other users. Show the proposal with `show_reservation_info` and only call this tool once the user confirmed it. The resource ID must come from `find_available_resources`. Times are in the office's local time.",
+              "inputSchema": {
+                "properties": {
+                  "resource_id": {
+                    "type": "string",
+                    "description": "Resource ID from find_available_resources"
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "Start in the office's local time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "End in the office's local time"
+                  },
+                  "user_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "description": "Users the reservation is for; the current user when empty. Desks are for one user."
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Short title"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Description"
+                  },
+                  "online_meeting_provider": {
+                    "type": "string",
+                    "description": "Online meeting to add"
+                  },
+                  "recurring": {
+                    "properties": {
+                      "rrule": {
+                        "type": "string",
+                        "description": "Recurrence rule"
+                      },
+                      "start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "First day of the series"
+                      },
+                      "end_date": {
+                        "type": "string",
+                        "description": "Last day of the series"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "rrule",
+                      "start_date"
+                    ],
+                    "description": "Makes the reservation repeat"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "resource_id",
+                  "start",
+                  "end"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Reserve",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "create_visit",
+              "description": "Invites a visitor to an office; they get an email with a check-in code. Show the invitation first with `show_visit_info` and only call this tool once the user confirmed it. A host needs a visitor type, and a visitor type that requires a host needs one.",
+              "inputSchema": {
+                "properties": {
+                  "office_id": {
+                    "type": "string",
+                    "description": "Office the visitor comes to"
+                  },
+                  "visitor_name": {
+                    "type": "string",
+                    "description": "Full name of the visitor"
+                  },
+                  "visitor_email": {
+                    "type": "string",
+                    "description": "Email of the visitor"
+                  },
+                  "expected": {
+                    "type": "string",
+                    "description": "When the visitor is expected"
+                  },
+                  "visitor_type_id": {
+                    "type": "string",
+                    "description": "Visitor type ID from get_visitor_types"
+                  },
+                  "host_id": {
+                    "type": "string",
+                    "description": "User ID of the host; needs a visitor type"
+                  },
+                  "visit_fields": {
+                    "items": {
+                      "properties": {
+                        "field_id": {
+                          "type": "string",
+                          "description": "Field ID of the visitor type"
+                        },
+                        "value": {
+                          "type": "string",
+                          "description": "Value of the field"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "field_id",
+                        "value"
+                      ]
+                    },
+                    "type": "array",
+                    "description": "Values of the visitor type's extra fields"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "office_id",
+                  "visitor_name",
+                  "visitor_email",
+                  "expected"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": true,
+                "openWorldHint": true,
+                "title": "Invite visitor",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "create_workplace_request",
+              "description": "Creates a workplace request. Show it first with `show_workplace_request_info` and only call this tool once the user confirmed it. The type ID must come from `list_workplace_request_types`.",
+              "inputSchema": {
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Short description of the request"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Detailed description of the request"
+                  },
+                  "type_id": {
+                    "type": "string",
+                    "description": "Workplace request type ID from list_workplace_request_types (its exact name also works)"
+                  },
+                  "office_id": {
+                    "type": "string",
+                    "description": "Office the request is for"
+                  },
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "Reservation the request is for"
+                  },
+                  "resource_id": {
+                    "type": "string",
+                    "description": "Resource the request is about"
+                  },
+                  "attachments": {
+                    "items": {
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "path",
+                        "filename"
+                      ]
+                    },
+                    "type": "array",
+                    "description": "Photos uploaded by the workplace request card (never made up)"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "title",
+                  "description",
+                  "type_id",
+                  "office_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Create workplace request",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "find_available_resources",
+              "description": "Returns a list of resources available to make a reservation at the given start and end times for the given users.\n- If user requests a specific resource name, use this tool to find it because not all resources are returned by default.\n- Resources are returned in the order of priority, the ones with the highest priority are returned first, use them first.\n- This tool will return permission errors if the user does not have permission to create the requested reservation.\n- To only find resources on a floor or in a zone the user names, pass floor_id or zone_id from list_office_places.\n- Only the top 5 resources are returned; total says how many are available in all. Use total for \"how many desks are free\" questions. To list every available resource (with its floor), e.g. for a full list or a CSV, pass all: true.\n\nExample responses:\n- Example 1, available desk and room, prefer the desk:\n\t- {\"resources\":[{\"id\": \"reso_cafb552b-e49a-4035-b7d9-518875e3d342\", \"name\": \"Desk 1\", \"type\": \"desk\"},{\"id\": \"reso_fbaaaf6b-6d03-4a20-b585-580970abeb41\", \"name\": \"Meeting Room 2\", \"type\": \"meeting_room\"}],\"total\":2}\n- Example 2, available room and desk, prefer the room:\n\t- {\"resources\":[{\"id\": \"reso_7d38458b-c1dc-4b47-aa14-51d2050508c5\", \"name\": \"Meeting Room 1\", \"type\": \"meeting_room\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Desk 2\", \"type\": \"desk\"}]}\n- Example 3, two available rooms, only one has an online meeting provider available:\n\t- {\"resources\":[{\"id\": \"reso_7d38458b-c1dc-4b47-aa14-51d2050508c5\", \"name\": \"Meeting Room 1\", \"type\": \"meeting_room\", \"online_meeting_provider\": \"teams_for_business\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Meeting Room 2\", \"type\": \"meeting_room\"}]}\n- Example 4, all: true, every available desk with its floor:\n\t- {\"resources\":[{\"id\": \"reso_cafb552b-e49a-4035-b7d9-518875e3d342\", \"name\": \"Desk 1\", \"type\": \"desk\", \"floor\": \"Floor 2\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Desk 2\", \"type\": \"desk\", \"floor\": \"Floor 2\"}],\"total\":2}\n- When no available resources are found, the response is an empty list: {\"resources\":[],\"total\":0}\n\nExample responses for permission errors:\n- Example 1, user cannot create reservations on behalf of others, only for himself:\n  - {\"permission_error\":\"user does not have permission to create reservations for others\"}\n- Example 2, user cannot create reservations in the past:\n  - {\"permission_error\":\"user is not allowed to create reservations in the past\"}\n- Example 3, office does not allow creating recurring reservations for resources of type desk:\n  - {\"permission_error\":\"office does not allow creating recurring reservations for resources of type desk\"}\n- Example 4, user cannot create reservations for the requested users:\n  - {\"permission_error\":\"user does not have permission to create reservations for the requested users\"}",
+              "inputSchema": {
+                "$defs": {
+                  "FindAvailableResourcesRecurringArgs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end_date": {
+                        "description": "The end date of the recurring reservation or 'null' if the recurring reservation is indefinite",
+                        "type": "string"
+                      },
+                      "rrule": {
+                        "description": "The recurring rule of the reservation. The rule must be a valid RRULE string.",
+                        "type": "string"
+                      },
+                      "start_date": {
+                        "description": "The start date of the recurring reservation",
+                        "format": "date",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "start_date",
+                      "end_date",
+                      "rrule"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Returns a list of resources available to make a reservation at the given start and end times for the given users.\n- If user requests a specific resource name, use this tool to find it because not all resources are returned by default.\n- Resources are returned in the order of priority, the ones with the highest priority are returned first, use them first.\n- This tool will return permission errors if the user does not have permission to create the requested reservation.\n- To only find resources on a floor or in a zone the user names, pass floor_id or zone_id from list_office_places.\n- Only the top 5 resources are returned; total says how many are available in all. Use total for \"how many desks are free\" questions. To list every available resource (with its floor), e.g. for a full list or a CSV, pass all: true.\n\nExample responses:\n- Example 1, available desk and room, prefer the desk:\n\t- {\"resources\":[{\"id\": \"reso_cafb552b-e49a-4035-b7d9-518875e3d342\", \"name\": \"Desk 1\", \"type\": \"desk\"},{\"id\": \"reso_fbaaaf6b-6d03-4a20-b585-580970abeb41\", \"name\": \"Meeting Room 2\", \"type\": \"meeting_room\"}],\"total\":2}\n- Example 2, available room and desk, prefer the room:\n\t- {\"resources\":[{\"id\": \"reso_7d38458b-c1dc-4b47-aa14-51d2050508c5\", \"name\": \"Meeting Room 1\", \"type\": \"meeting_room\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Desk 2\", \"type\": \"desk\"}]}\n- Example 3, two available rooms, only one has an online meeting provider available:\n\t- {\"resources\":[{\"id\": \"reso_7d38458b-c1dc-4b47-aa14-51d2050508c5\", \"name\": \"Meeting Room 1\", \"type\": \"meeting_room\", \"online_meeting_provider\": \"teams_for_business\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Meeting Room 2\", \"type\": \"meeting_room\"}]}\n- Example 4, all: true, every available desk with its floor:\n\t- {\"resources\":[{\"id\": \"reso_cafb552b-e49a-4035-b7d9-518875e3d342\", \"name\": \"Desk 1\", \"type\": \"desk\", \"floor\": \"Floor 2\"},{\"id\": \"reso_6ae6d00b-ab65-49b5-9478-21481fd92a73\", \"name\": \"Desk 2\", \"type\": \"desk\", \"floor\": \"Floor 2\"}],\"total\":2}\n- When no available resources are found, the response is an empty list: {\"resources\":[],\"total\":0}\n\nExample responses for permission errors:\n- Example 1, user cannot create reservations on behalf of others, only for himself:\n  - {\"permission_error\":\"user does not have permission to create reservations for others\"}\n- Example 2, user cannot create reservations in the past:\n  - {\"permission_error\":\"user is not allowed to create reservations in the past\"}\n- Example 3, office does not allow creating recurring reservations for resources of type desk:\n  - {\"permission_error\":\"office does not allow creating recurring reservations for resources of type desk\"}\n- Example 4, user cannot create reservations for the requested users:\n  - {\"permission_error\":\"user does not have permission to create reservations for the requested users\"}",
+                "properties": {
+                  "all": {
+                    "description": "Return every available resource with its floor instead of the top 5, e.g. to list them all or export them as a CSV. Not needed just to count them: total is always returned",
+                    "type": "boolean"
+                  },
+                  "attendee_emails": {
+                    "description": "The list of user emails that will be in the reservation to find available resources for. This is ONLY for meeting rooms",
+                    "items": {
+                      "format": "email",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "end": {
+                    "description": "The end date of the reservation to find available resources for. End must *not* be more than 24 hours after start.",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "floor_id": {
+                    "description": "Optional floor ID from list_office_places, to only find resources on that floor",
+                    "type": "string"
+                  },
+                  "min_room_capacity": {
+                    "description": "For meeting rooms ONLY",
+                    "type": "integer"
+                  },
+                  "moving_schedule_id": {
+                    "description": "When looking for another resource or time for an existing reservation (to move it)",
+                    "type": "string"
+                  },
+                  "office_id": {
+                    "description": "The ID of the office to find available resources for",
+                    "type": "string"
+                  },
+                  "organizer_user_id": {
+                    "description": "The user ID of the organizer of the reservation",
+                    "type": "string"
+                  },
+                  "recurring": {
+                    "$ref": "#/$defs/FindAvailableResourcesRecurringArgs",
+                    "description": "The recurring data when the reservation is recurring"
+                  },
+                  "resource_name": {
+                    "description": "The name of a specific resource to check availability for",
+                    "type": "string"
+                  },
+                  "resource_type": {
+                    "description": "The type of resource to find available resources for",
+                    "enum": [
+                      "desk",
+                      "meeting_room"
+                    ],
+                    "type": "string"
+                  },
+                  "start": {
+                    "description": "The start date of the reservation to find available resources for",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "with_online_meeting": {
+                    "description": "Whether to only return resources with an online meeting provider available",
+                    "type": "boolean"
+                  },
+                  "zone_id": {
+                    "description": "Optional zone ID from list_office_places, to only find resources inside that zone (smaller zones drawn within it and its sub-zones included)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "organizer_user_id",
+                  "resource_type",
+                  "office_id",
+                  "start",
+                  "end",
+                  "with_online_meeting",
+                  "attendee_emails"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "find_teams",
+              "description": "Finds teams by name. It returns a list with all found teams and their users. Example:\n- {\"teams\":[{\"id\": \"team_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Team 1\", \"users\": [{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}, {\"id\": \"team_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Team 2\", \"users\": [{\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}, {\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}]}]}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Finds teams by name. It returns a list with all found teams and their users. Example:\n- {\"teams\":[{\"id\": \"team_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Team 1\", \"users\": [{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}, {\"id\": \"team_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Team 2\", \"users\": [{\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}, {\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}]}]}",
+                "properties": {
+                  "search_text": {
+                    "description": "The text to search for in team names",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "search_text"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "find_users",
+              "description": "Finds users by email addresses or names. It returns a list with all users found. When looking up by name it may return multiple users that match the name, ask the user for clarification if needed.\nExamples:\n- Example 1 (found both users by email):\n\t- Input: [\"cason.conway@example.com\", \"arturo.mckee@example.com\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}\n- Example 2 (\"cason\" and \"arturo.mckee@example.com\" are not found):\n\t- Input: [\"cason\", \"arturo.mckee@example.com\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}\n- Example 3 (\"cason\" refers to multiple users, \"arturo\" is not found):\n\t- Input: [\"cason\", \"arturo\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Cason McKee\", \"email\": \"cason.mckee@example.com\"}]}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Finds users by email addresses or names. It returns a list with all users found. When looking up by name it may return multiple users that match the name, ask the user for clarification if needed.\nExamples:\n- Example 1 (found both users by email):\n\t- Input: [\"cason.conway@example.com\", \"arturo.mckee@example.com\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}\n- Example 2 (\"cason\" and \"arturo.mckee@example.com\" are not found):\n\t- Input: [\"cason\", \"arturo.mckee@example.com\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Arturo McKee\", \"email\": \"arturo.mckee@example.com\"}]}\n- Example 3 (\"cason\" refers to multiple users, \"arturo\" is not found):\n\t- Input: [\"cason\", \"arturo\"]\n\t- Output: {\"users\":[{\"id\": \"user_d934fc88-470f-49cc-a747-8506fdfe1d6d\", \"name\": \"Cason Conway\", \"email\": \"cason.conway@example.com\"}, {\"id\": \"user_b3ac8916-a63d-40b7-993f-de240e98af7a\", \"name\": \"Cason McKee\", \"email\": \"cason.mckee@example.com\"}]}",
+                "properties": {
+                  "users": {
+                    "description": "The list of email addresses or names to find users for",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "users"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_current_date_time",
+              "description": "Get current date, time, week and year at the user's location",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Get current date, time, week and year at the user's location",
+                "properties": {},
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_current_user_context",
+              "description": "Returns who the current user is (name, email, ID, timezone), the people they interact with the most, their default office and the other offices they can use with their default reservation times. Call it before anything that refers to the current user (\"me\", \"my\", \"I\") or to their offices.",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Current user context",
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_date_time",
+              "description": "Get date, time, week and year at the user's location adding or subtracting the given number of days, weeks, months or years. Examples:\n- \"tomorrow\" -> {\"in_n_days\": 1, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"in two days\" -> {\"in_n_days\": 2, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"next week\" -> {\"in_n_days\": 0, \"in_n_weeks\": 1, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"next wednesday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"next_day_of_week\": \"wednesday\"}\n- \"tuesday next week\" -> {\"in_n_days\": 0, \"in_n_weeks\": 1, \"in_n_months\": 0, \"in_n_years\": 0, \"next_day_of_week\": \"tuesday\"}\n- \"next month\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 1, \"in_n_years\": 0}\n- \"next year\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 1}\n- \"yesterday\" -> {\"in_n_days\": -1, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous monday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"monday\"}\n- \"last tuesday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"tuesday\"}\n- \"tuesday last week\" -> {\"in_n_days\": 0, \"in_n_weeks\": -1, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"tuesday\"}\n- \"two days ago\" -> {\"in_n_days\": -2, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous week\" -> {\"in_n_days\": 0, \"in_n_weeks\": -1, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous month\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": -1, \"in_n_years\": 0}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Get date, time, week and year at the user's location adding or subtracting the given number of days, weeks, months or years. Examples:\n- \"tomorrow\" -> {\"in_n_days\": 1, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"in two days\" -> {\"in_n_days\": 2, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"next week\" -> {\"in_n_days\": 0, \"in_n_weeks\": 1, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"next wednesday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"next_day_of_week\": \"wednesday\"}\n- \"tuesday next week\" -> {\"in_n_days\": 0, \"in_n_weeks\": 1, \"in_n_months\": 0, \"in_n_years\": 0, \"next_day_of_week\": \"tuesday\"}\n- \"next month\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 1, \"in_n_years\": 0}\n- \"next year\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 1}\n- \"yesterday\" -> {\"in_n_days\": -1, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous monday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"monday\"}\n- \"last tuesday\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"tuesday\"}\n- \"tuesday last week\" -> {\"in_n_days\": 0, \"in_n_weeks\": -1, \"in_n_months\": 0, \"in_n_years\": 0, \"previous_day_of_week\": \"tuesday\"}\n- \"two days ago\" -> {\"in_n_days\": -2, \"in_n_weeks\": 0, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous week\" -> {\"in_n_days\": 0, \"in_n_weeks\": -1, \"in_n_months\": 0, \"in_n_years\": 0}\n- \"previous month\" -> {\"in_n_days\": 0, \"in_n_weeks\": 0, \"in_n_months\": -1, \"in_n_years\": 0}",
+                "properties": {
+                  "day_of_week": {
+                    "description": "Gets the date and time for the next occurrence of the given day of the week",
+                    "enum": [
+                      "sunday",
+                      "monday",
+                      "tuesday",
+                      "wednesday",
+                      "thursday",
+                      "friday",
+                      "saturday"
+                    ],
+                    "type": "string"
+                  },
+                  "in_n_days": {
+                    "description": "The number of days to add or subtract from now",
+                    "type": "integer"
+                  },
+                  "in_n_months": {
+                    "description": "The number of months to add or subtract from now",
+                    "type": "integer"
+                  },
+                  "in_n_weeks": {
+                    "description": "The number of weeks to add or subtract from now",
+                    "type": "integer"
+                  },
+                  "in_n_years": {
+                    "description": "The number of years to add or subtract from now",
+                    "type": "integer"
+                  },
+                  "next_day_of_week": {
+                    "description": "Gets the date and time for the next occurrence of the given day of the week",
+                    "enum": [
+                      "sunday",
+                      "monday",
+                      "tuesday",
+                      "wednesday",
+                      "thursday",
+                      "friday",
+                      "saturday"
+                    ],
+                    "type": "string"
+                  },
+                  "previous_day_of_week": {
+                    "description": "Gets the date and time for the previous occurrence of the given day of the week",
+                    "enum": [
+                      "sunday",
+                      "monday",
+                      "tuesday",
+                      "wednesday",
+                      "thursday",
+                      "friday",
+                      "saturday"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "in_n_days",
+                  "in_n_weeks",
+                  "in_n_months",
+                  "in_n_years"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_floor_occupancy",
+              "description": "Gets who is booked in an office on a day, grouped by floor: each person with the resource (desk, meeting room, parking...), their times and whether they checked in. Private reservations show no person. Pass resource_id (e.g. the desk the user booked that day, from get_users_working_locations_at_week) to only get the people on that floor, or floor_id or zone_id from list_office_places for a floor or zone the user names. Use it for \"who's near me\", \"who's on my floor\" or \"who's sitting next to ...\" questions. Example:\n- {\"office\":\"Lisbon HQ\",\"date\":\"2026-10-02\",\"total\":2,\"floors\":[{\"id\":\"reso_...\",\"name\":\"Floor 2\",\"occupants\":[{\"resource\":{\"id\":\"reso_...\",\"name\":\"Desk 12\",\"resource_type\":\"desk\"},\"user\":{\"id\":\"user_...\",\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\"},\"start\":\"2026-10-02T09:00:00\",\"end\":\"2026-10-02T17:00:00\",\"checked_in\":true},{\"resource\":{\"id\":\"reso_...\",\"name\":\"Desk 14\",\"resource_type\":\"desk\"},\"user\":\"private reservation\",\"start\":\"2026-10-02T09:00:00\",\"end\":\"2026-10-02T17:00:00\",\"checked_in\":false}]}]}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Gets who is booked in an office on a day, grouped by floor: each person with the resource (desk, meeting room, parking...), their times and whether they checked in. Private reservations show no person. Pass resource_id (e.g. the desk the user booked that day, from get_users_working_locations_at_week) to only get the people on that floor, or floor_id or zone_id from list_office_places for a floor or zone the user names. Use it for \"who's near me\", \"who's on my floor\" or \"who's sitting next to ...\" questions. Example:\n- {\"office\":\"Lisbon HQ\",\"date\":\"2026-10-02\",\"total\":2,\"floors\":[{\"id\":\"reso_...\",\"name\":\"Floor 2\",\"occupants\":[{\"resource\":{\"id\":\"reso_...\",\"name\":\"Desk 12\",\"resource_type\":\"desk\"},\"user\":{\"id\":\"user_...\",\"name\":\"Ada Lovelace\",\"email\":\"ada@example.com\"},\"start\":\"2026-10-02T09:00:00\",\"end\":\"2026-10-02T17:00:00\",\"checked_in\":true},{\"resource\":{\"id\":\"reso_...\",\"name\":\"Desk 14\",\"resource_type\":\"desk\"},\"user\":\"private reservation\",\"start\":\"2026-10-02T09:00:00\",\"end\":\"2026-10-02T17:00:00\",\"checked_in\":false}]}]}",
+                "properties": {
+                  "date": {
+                    "description": "The day to check in the format YYYY-MM-DD",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "floor_id": {
+                    "description": "Optional floor ID from list_office_places; only the people on that floor are returned",
+                    "type": "string"
+                  },
+                  "office_id": {
+                    "description": "The ID of the office",
+                    "type": "string"
+                  },
+                  "resource_id": {
+                    "description": "Optional resource ID",
+                    "type": "string"
+                  },
+                  "zone_id": {
+                    "description": "Optional zone ID from list_office_places; only the people inside that zone (smaller zones drawn within it and its sub-zones included) are returned",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "office_id",
+                  "date"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_my_workplace_requests",
+              "description": "Lists the workplace requests the current user submitted, newest first, with their status, priority, who they are assigned to and when they were last updated. Use it when the user asks about their requests, e.g. \"what happened to my monitor request?\" (search \"monitor\"), \"do I have open requests?\". Then show them with show_workplace_requests.\nExample response: {\"requests\":[{\"id\":\"0190a000-0000-7000-8000-0000000000aa\",\"number\":3073,\"title\":\"Broken monitor\",\"type\":\"IT\",\"status\":\"In progress\",\"base_status\":\"open\",\"priority\":\"medium\",\"office\":\"Lisbon HQ\",\"location\":\"Desk 187\",\"assigned_to\":\"Ana Silva\",\"created\":\"2026-10-01 09:12\",\"updated\":\"2026-10-02 10:30\",\"url\":\"https://...\"}],\"total\":1}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Lists the workplace requests the current user submitted, newest first, with their status, priority, who they are assigned to and when they were last updated. Use it when the user asks about their requests, e.g. \"what happened to my monitor request?\" (search \"monitor\"), \"do I have open requests?\". Then show them with show_workplace_requests.\nExample response: {\"requests\":[{\"id\":\"0190a000-0000-7000-8000-0000000000aa\",\"number\":3073,\"title\":\"Broken monitor\",\"type\":\"IT\",\"status\":\"In progress\",\"base_status\":\"open\",\"priority\":\"medium\",\"office\":\"Lisbon HQ\",\"location\":\"Desk 187\",\"assigned_to\":\"Ana Silva\",\"created\":\"2026-10-01 09:12\",\"updated\":\"2026-10-02 10:30\",\"url\":\"https://...\"}],\"total\":1}",
+                "properties": {
+                  "search": {
+                    "description": "Words to look for in the request title or description, e.g. monitor",
+                    "type": "string"
+                  },
+                  "statuses": {
+                    "description": "Only requests in these statuses: open, pending, closed or archived. Defaults to open, pending and closed",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_users_in_office_at_week",
+              "description": "Gets users that are in the given office at the week containing the given date. If the user is not in the results, it means it's not in the office at the given week. It returns a map of user IDs with their working location data *at each day* of the given week. Examples:\n- \"user1@example.com\" is in the office on 2024-08-12 and remote on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"remote\",\"user_email\":\"user1@example.com\"}}}\n- \"user1@example.com\" is has a reservation on 2024-08-12 and user2@example.com is not in the office on 2024-08-12: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}, \"user_b84bed39-3e4f-4096-9c9b-8b29a0605f73\":{\"2024-08-12\":{\"location\":\"remote\",\"user_email\":\"user2@example.com\"}}}\n- \"user1@example.com\" is in the office on 2024-08-12 and 2024-08-13 and also has a reservation on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Gets users that are in the given office at the week containing the given date. If the user is not in the results, it means it's not in the office at the given week. It returns a map of user IDs with their working location data *at each day* of the given week. Examples:\n- \"user1@example.com\" is in the office on 2024-08-12 and remote on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"remote\",\"user_email\":\"user1@example.com\"}}}\n- \"user1@example.com\" is has a reservation on 2024-08-12 and user2@example.com is not in the office on 2024-08-12: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}, \"user_b84bed39-3e4f-4096-9c9b-8b29a0605f73\":{\"2024-08-12\":{\"location\":\"remote\",\"user_email\":\"user2@example.com\"}}}\n- \"user1@example.com\" is in the office on 2024-08-12 and 2024-08-13 and also has a reservation on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}}",
+                "properties": {
+                  "date": {
+                    "description": "Any date within the week to check in the format YYYY-MM-DD",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "office_id": {
+                    "description": "The ID of the office to get the users in",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "office_id",
+                  "date"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_users_working_locations_at_week",
+              "description": "Gets the reservations (desk, room and parking bookings) and working locations of one or more users for a week. Use it for \"my reservations\", \"my bookings\", \"what have I booked\", \"when am I in the office\" and \"where are my colleagues this week\". Gets users working locations by email addresses at the week containing the given date. It returns a map of user IDs with their working location data for the given week. This tool should also be used to know if users have reservations at the given week. Examples:\n- \"user1@example.com\" is in the office on 2024-08-12 and remote on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"remote\",\"user_email\":\"user1@example.com\"}}}\n- \"user1@example.com\" is has a reservation on 2024-08-12 and user2@example.com is not in the office on 2024-08-12: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}, \"user_b84bed39-3e4f-4096-9c9b-8b29a0605f73\":{\"2024-08-12\":{\"location\":\"remote\",\"user_email\":\"user2@example.com\"}}}\n- \"user1@example.com\" is in the office on 2024-08-12 and 2024-08-13 and also has a reservation on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Gets users working locations by email addresses at the week containing the given date. It returns a map of user IDs with their working location data for the given week. This tool should also be used to know if users have reservations at the given week. Examples:\n- \"user1@example.com\" is in the office on 2024-08-12 and remote on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"remote\",\"user_email\":\"user1@example.com\"}}}\n- \"user1@example.com\" is has a reservation on 2024-08-12 and user2@example.com is not in the office on 2024-08-12: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}, \"user_b84bed39-3e4f-4096-9c9b-8b29a0605f73\":{\"2024-08-12\":{\"location\":\"remote\",\"user_email\":\"user2@example.com\"}}}\n- \"user1@example.com\" is in the office on 2024-08-12 and 2024-08-13 and also has a reservation on 2024-08-13: {\"user_27e51897-53e7-4e98-84e1-d01e7cd18e4f\":{\"2024-08-12\":{\"location\":\"office\",\"user_email\":\"user1@example.com\"},\"2024-08-13\":{\"location\":\"office\",\"user_email\":\"user1@example.com\",\"schedules\":[{\"id\": \"2d97d1fe-cedd-4522-8480-1b1a013a9a6b\",\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}}]}}}",
+                "properties": {
+                  "date": {
+                    "description": "Any date within the week to check in the format YYYY-MM-DD",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "emails": {
+                    "description": "A list of emails of the users to get",
+                    "items": {
+                      "format": "email",
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "emails",
+                  "date"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_workplace_request",
+              "description": "Gets one workplace request by its ID or number (e.g. 3073) with its activity: comments and changes (status, assignee, priority...) oldest first. Use it to explain where a request stands and what happened to it. Then show it with show_workplace_requests.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Gets one workplace request by its ID or number (e.g. 3073) with its activity: comments and changes (status, assignee, priority...) oldest first. Use it to explain where a request stands and what happened to it. Then show it with show_workplace_requests.",
+                "properties": {
+                  "request_id": {
+                    "description": "The request ID or its number, e.g. 3073",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "request_id"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "get_workplace_requests_summary",
+              "description": "For people who manage workplace requests: summarizes the unresolved (open and pending) requests they manage, optionally for one office. Returns the counts by status, type, office and floor, how many are unassigned, the high priority ones and the oldest ones. Use it for \"what should my team work on first?\", \"summarize open requests by floor\". Suggest priorities from high priority, age, unassigned requests and where they pile up. If there are none, the user doesn't manage any open requests.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "For people who manage workplace requests: summarizes the unresolved (open and pending) requests they manage, optionally for one office. Returns the counts by status, type, office and floor, how many are unassigned, the high priority ones and the oldest ones. Use it for \"what should my team work on first?\", \"summarize open requests by floor\". Suggest priorities from high priority, age, unassigned requests and where they pile up. If there are none, the user doesn't manage any open requests.",
+                "properties": {
+                  "office_id": {
+                    "description": "Only requests of this office. All the offices the user manages requests for when omitted",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "list_office_places",
+              "description": "Lists the floors and zones of an office with their IDs. Zones are parts of the floor plans such as a team's area (\"Engineering\"), a quiet area or a single room; a zone covers everything drawn inside it, smaller zones included, plus its sub-zones, and can span floors. Use it when the user names a floor or a zone, then pass its ID as floor_id or zone_id to find_available_resources or get_floor_occupancy. Match the user's words to the names (e.g. \"floor 2\", \"second floor\" -> \"Floor 2\"); if nothing matches, say which floors and zones there are. Example:\n- {\"office\":\"Lisbon HQ\",\"floors\":[{\"id\":\"reso_...\",\"name\":\"Floor 1\"},{\"id\":\"reso_...\",\"name\":\"Floor 2\"}],\"zones\":[{\"id\":\"zone_...\",\"name\":\"Engineering\",\"desks\":24,\"meeting_rooms\":2},{\"id\":\"zone_...\",\"name\":\"Platform team\",\"parent\":\"Engineering\",\"desks\":8,\"meeting_rooms\":0}]}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Lists the floors and zones of an office with their IDs. Zones are parts of the floor plans such as a team's area (\"Engineering\"), a quiet area or a single room; a zone covers everything drawn inside it, smaller zones included, plus its sub-zones, and can span floors. Use it when the user names a floor or a zone, then pass its ID as floor_id or zone_id to find_available_resources or get_floor_occupancy. Match the user's words to the names (e.g. \"floor 2\", \"second floor\" -> \"Floor 2\"); if nothing matches, say which floors and zones there are. Example:\n- {\"office\":\"Lisbon HQ\",\"floors\":[{\"id\":\"reso_...\",\"name\":\"Floor 1\"},{\"id\":\"reso_...\",\"name\":\"Floor 2\"}],\"zones\":[{\"id\":\"zone_...\",\"name\":\"Engineering\",\"desks\":24,\"meeting_rooms\":2},{\"id\":\"zone_...\",\"name\":\"Platform team\",\"parent\":\"Engineering\",\"desks\":8,\"meeting_rooms\":0}]}",
+                "properties": {
+                  "office_id": {
+                    "description": "The ID of the office",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "office_id"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "list_offices",
+              "description": "Lists the offices the user can use with their IDs, by name, optionally only the ones matching a query (name, city, state or country). Use it when the user names an office that isn't in their context, e.g. \"book a desk in Madrid\", or asks which offices there are. total is how many match; only the first 200 are listed. Example:\n- {\"offices\":[{\"id\":\"offi_...\",\"name\":\"Madrid Castellana\",\"city\":\"Madrid\",\"country\":\"Spain\",\"timezone\":\"Europe/Madrid\"}],\"total\":1}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Lists the offices the user can use with their IDs, by name, optionally only the ones matching a query (name, city, state or country). Use it when the user names an office that isn't in their context, e.g. \"book a desk in Madrid\", or asks which offices there are. total is how many match; only the first 200 are listed. Example:\n- {\"offices\":[{\"id\":\"offi_...\",\"name\":\"Madrid Castellana\",\"city\":\"Madrid\",\"country\":\"Spain\",\"timezone\":\"Europe/Madrid\"}],\"total\":1}",
+                "properties": {
+                  "query": {
+                    "description": "Optional words to find offices by name, city, state or country, e.g. Madrid. Leave it empty to get every office",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "list_report_boards",
+              "description": "Lists the user's report boards (default boards and their own) with the questions on each. Use it to answer what is on a board, or to find where to save a report.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Lists the user's report boards (default boards and their own) with the questions on each. Use it to answer what is on a board, or to find where to save a report.",
+                "properties": {},
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "list_workplace_request_types",
+              "description": "Lists the types of workplace requests (e.g. broken equipment, cleaning, catering) the user can create, with their IDs and when to use each one.",
+              "inputSchema": {
+                "properties": {},
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Workplace request types",
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "move_reservation",
+              "description": "Moves a reservation of the current user to another resource and/or time, keeping its attendees. Show the change first with `show_reservation_change` and only call this tool once the user confirmed it. The resource ID must come from `find_available_resources`. Times are in the office's local time.",
+              "inputSchema": {
+                "properties": {
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "ID of the reservation to move"
+                  },
+                  "resource_id": {
+                    "type": "string",
+                    "description": "The new resource ID from find_available_resources; omit to keep the resource"
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "New start in the office's local time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "New end in the office's local time"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "schedule_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": true,
+                "openWorldHint": false,
+                "title": "Move reservation",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "release_reservations",
+              "description": "Releases reservations of the current user for a day, e.g. when they are sick or not coming in, and optionally their dedicated desk that day. Show them first with `show_release_reservations` and only call this tool once the user confirmed it.",
+              "inputSchema": {
+                "properties": {
+                  "schedule_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "description": "IDs of the reservations to release"
+                  },
+                  "dedicated_resource_id": {
+                    "type": "string",
+                    "description": "The user's dedicated desk to release for the day"
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The day the dedicated desk is released"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": true,
+                "openWorldHint": false,
+                "title": "Release reservations",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "report_outlook",
+              "description": "Looks ahead: how busy each office is expected to be on the next ten working days (today included), from what is booked already and how days of that weekday usually fill up. Use it for questions about the coming days or weeks: \"how busy will next Tuesday be\", \"is Wednesday going to be full\", \"when is the quietest day to come in\", \"is there room for my team on Thursday\". Returns, per office and day, what is booked so far, where the day is heading (expected), the inventory, the expected share in percent, what a usual such day ends at, and how sure the forecast is. Answer in words with the expected number and share against the inventory; say when confidence is low. Never use build_report_query for the future, it only looks back.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Looks ahead: how busy each office is expected to be on the next ten working days (today included), from what is booked already and how days of that weekday usually fill up. Use it for questions about the coming days or weeks: \"how busy will next Tuesday be\", \"is Wednesday going to be full\", \"when is the quietest day to come in\", \"is there room for my team on Thursday\". Returns, per office and day, what is booked so far, where the day is heading (expected), the inventory, the expected share in percent, what a usual such day ends at, and how sure the forecast is. Answer in words with the expected number and share against the inventory; say when confidence is low. Never use build_report_query for the future, it only looks back.",
+                "properties": {
+                  "office_ids": {
+                    "description": "Office IDs to look at (IDs from the Reports section of your instructions",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "resource_type": {
+                    "description": "desk for desks and workspaces (the default)",
+                    "enum": [
+                      "desk",
+                      "parking"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "save_report_to_board",
+              "description": "Pins a report query on one of the user's boards when they ask to save, pin or add a report to a board. Use the exact query that build_report_query ran. Match board_name to one of their editable boards from list_report_boards; if none matches, a new private board with that name is created. Confirm what was saved and where.",
+              "inputSchema": {
+                "$defs": {
+                  "BuildReportQueryArgs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "breakdown": {
+                        "description": "Up to two dimension keys to group by (office",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "compare": {
+                        "description": "previous_period to compare with the period before",
+                        "enum": [
+                          "previous_period",
+                          "same_period_last_year"
+                        ],
+                        "type": "string"
+                      },
+                      "filters": {
+                        "description": "Dimension filters",
+                        "items": {
+                          "$ref": "#/$defs/ReportFilterArgs"
+                        },
+                        "type": "array"
+                      },
+                      "measure": {
+                        "description": "Measure key; desks counts the inventory as it stands (by access_mode",
+                        "enum": [
+                          "requests",
+                          "resolved",
+                          "time_to_resolve",
+                          "reservations",
+                          "occupancy",
+                          "checkin_rate",
+                          "no_shows",
+                          "room_hours",
+                          "participants",
+                          "desks",
+                          "visits",
+                          "invitations",
+                          "deliveries",
+                          "remote_days",
+                          "vacation_days",
+                          "new_users",
+                          "space_area",
+                          "area_per_desk"
+                        ],
+                        "type": "string"
+                      },
+                      "period": {
+                        "$ref": "#/$defs/ReportPeriodArgs",
+                        "description": "Period to report on"
+                      },
+                      "with": {
+                        "description": "A second measure drawn beside the first over the same breakdown",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "measure",
+                      "period"
+                    ],
+                    "type": "object"
+                  },
+                  "ReportFilterArgs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dimension": {
+                        "description": "Dimension key: office",
+                        "type": "string"
+                      },
+                      "in": {
+                        "description": "Member IDs to keep (never names; IDs come from the reporting section of your instructions). For status",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "dimension",
+                      "in"
+                    ],
+                    "type": "object"
+                  },
+                  "ReportPeriodArgs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "from": {
+                        "description": "First day (inclusive) for a custom period",
+                        "format": "date",
+                        "type": "string"
+                      },
+                      "grain": {
+                        "description": "Time bucket for the trend; omit to let the period decide",
+                        "enum": [
+                          "day",
+                          "week",
+                          "month"
+                        ],
+                        "type": "string"
+                      },
+                      "preset": {
+                        "description": "Period preset; use custom with from and to for anything else",
+                        "enum": [
+                          "last_7_days",
+                          "last_30_days",
+                          "last_90_days",
+                          "year_to_date",
+                          "custom"
+                        ],
+                        "type": "string"
+                      },
+                      "to": {
+                        "description": "Last day (inclusive) for a custom period",
+                        "format": "date",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "preset"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Pins a report query on one of the user's boards when they ask to save, pin or add a report to a board. Use the exact query that build_report_query ran. Match board_name to one of their editable boards from list_report_boards; if none matches, a new private board with that name is created. Confirm what was saved and where.",
+                "properties": {
+                  "board_name": {
+                    "description": "Name of one of the user's editable boards; a new private board is created when none matches",
+                    "type": "string"
+                  },
+                  "query": {
+                    "$ref": "#/$defs/BuildReportQueryArgs",
+                    "description": "The query to save"
+                  },
+                  "title": {
+                    "description": "Short title for the tile",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "board_name",
+                  "title",
+                  "query"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Save report to board",
+                "readOnlyHint": false
+              }
+            },
+            {
+              "name": "search_offices_documents",
+              "description": "Searches for information linked to offices documents. If the user asks for information about policies, procedures, events or anything else you don't have information about, use this tool to try to find relevant information.\n- The tool does semantic search, use expressive queries to find relevant information.\n- It returns a map of office ids with the information found for each one.\n- If nothing was found for a specific office, it will not be included in the response.\n- Example responses:\n  - Found information for \"Main Office\" but not for \"Main Office 2\": {\"offices_information\":{\"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}, \"results\": [\"The office is located in the main building on the 10th floor.\"]}}}\n  - Found information for \"Main Office\" and \"Main Office 2\": {\"offices_information\":{\"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}, \"results\": [\"The office has a gym and a parking lot open to the public.\"]}, \"offi_3b168e50-4dc0-44eb-97d3-010207c4c752\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c752\", \"name\": \"Main Office 2\"}, \"results\": [\"The office has a gym and a parking lot open to the public.\"]}}}",
+              "inputSchema": {
+                "additionalProperties": false,
+                "description": "Searches for information linked to offices documents. If the user asks for information about policies, procedures, events or anything else you don't have information about, use this tool to try to find relevant information.\n- The tool does semantic search, use expressive queries to find relevant information.\n- It returns a map of office ids with the information found for each one.\n- If nothing was found for a specific office, it will not be included in the response.\n- Example responses:\n  - Found information for \"Main Office\" but not for \"Main Office 2\": {\"offices_information\":{\"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}, \"results\": [\"The office is located in the main building on the 10th floor.\"]}}}\n  - Found information for \"Main Office\" and \"Main Office 2\": {\"offices_information\":{\"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c751\", \"name\": \"Main Office\"}, \"results\": [\"The office has a gym and a parking lot open to the public.\"]}, \"offi_3b168e50-4dc0-44eb-97d3-010207c4c752\":{\"office\": {\"id\": \"offi_3b168e50-4dc0-44eb-97d3-010207c4c752\", \"name\": \"Main Office 2\"}, \"results\": [\"The office has a gym and a parking lot open to the public.\"]}}}",
+                "properties": {
+                  "office_ids": {
+                    "description": "The list of office ids to search for information from",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "query": {
+                    "description": "The query to search for information from offices documents",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query",
+                  "office_ids"
+                ],
+                "type": "object"
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "readOnlyHint": true
+              }
+            },
+            {
+              "name": "show_floor_map",
+              "description": "Shows the map of a floor on a day to the user: who is booked where, which desks are still free and who is in. Use it when the user wants to see a floor or the office, e.g. \"show me floor 2 today\". Get the floor ID from `list_office_places`.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the floor that day, e.g. how many people are in."
+                  },
+                  "floor_id": {
+                    "type": "string",
+                    "description": "Floor ID from list_office_places"
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The day to show in the format YYYY-MM-DD"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "floor_id",
+                  "date"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Floor map",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_floor_map.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_floor_map.html"
+              }
+            },
+            {
+              "name": "show_release_reservations",
+              "description": "Shows the current user's reservations for a day as a card they can release, e.g. when they are sick or not coming in. Get the schedule IDs with `get_users_working_locations_at_week`: desks and parking, meeting rooms only when the user asks. The card also offers to release the user's dedicated desk that day. Showing the card releases nothing: it happens when the user confirms in the card or when you call `release_reservations`.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of what will be released."
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The day being released"
+                  },
+                  "schedule_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "description": "IDs of the user's own reservations that day to release (desks and parking; meeting rooms only when the user asks). Get them with get_users_working_locations_at_week."
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "date",
+                  "schedule_ids"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Release reservations",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_release_reservations.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_release_reservations.html"
+              }
+            },
+            {
+              "name": "show_report",
+              "description": "Shows a report as a chart, table or floor map after answering an analytics question with `build_report_query`. Pass the exact query the tool ran so the report can be drawn; the summary gives the key numbers.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the key numbers."
+                  },
+                  "query": {
+                    "properties": {
+                      "measure": {
+                        "type": "string",
+                        "description": "Measure key"
+                      },
+                      "breakdown": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array",
+                        "description": "Dimension keys grouped by"
+                      },
+                      "filters": {
+                        "items": {
+                          "properties": {
+                            "dimension": {
+                              "type": "string",
+                              "description": "Dimension key"
+                            },
+                            "in": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array",
+                              "description": "Member IDs kept"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "dimension",
+                            "in"
+                          ]
+                        },
+                        "type": "array",
+                        "description": "Dimension filters"
+                      },
+                      "period": {
+                        "properties": {
+                          "preset": {
+                            "type": "string",
+                            "description": "last_7_days"
+                          },
+                          "from": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "First day for a custom period"
+                          },
+                          "to": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Last day for a custom period"
+                          },
+                          "grain": {
+                            "type": "string",
+                            "description": "day"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": [
+                          "preset"
+                        ],
+                        "description": "Period reported on"
+                      },
+                      "compare": {
+                        "type": "string",
+                        "description": "previous_period when compared with the period before"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "measure",
+                      "period"
+                    ],
+                    "description": "The exact query passed to build_report_query"
+                  },
+                  "with": {
+                    "type": "string",
+                    "description": "The second measure passed to build_report_query as with"
+                  },
+                  "form": {
+                    "type": "string",
+                    "enum": [
+                      "chart",
+                      "table",
+                      "map"
+                    ],
+                    "description": "How to draw it: chart by default; table for a list; map to colour the floor plan"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "query"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Report",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_report.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_report.html"
+              }
+            },
+            {
+              "name": "show_reservation_change",
+              "description": "Shows an existing reservation moved to another resource and/or time as a card the user can confirm. Get the schedule ID with `get_users_working_locations_at_week` and a new resource with `find_available_resources`. Showing the card changes nothing: it happens when the user confirms in the card or when you call `move_reservation`.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the change."
+                  },
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "ID of the reservation to move. Get it with get_users_working_locations_at_week."
+                  },
+                  "resource_id": {
+                    "type": "string",
+                    "description": "The new resource ID (NEVER the name)"
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "The new start date and time. Omit to keep the same times."
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "The new end date and time. Omit to keep the same times."
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "schedule_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Reservation change",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_reservation_change.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_reservation_change.html"
+              }
+            },
+            {
+              "name": "show_reservation_info",
+              "description": "Shows proposed reservations to the user as a card they can confirm, including recurring reservations and workplace requests associated to them. Use it after finding resources with `find_available_resources`. Showing the card does not create the reservations: they are created when the user confirms them in the card or when you call `create_reservation`. Only use it with at least one reservation to show, and not for reservations already made (use `show_users_working_locations` for those).",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the result."
+                  },
+                  "reservations": {
+                    "items": {
+                      "properties": {
+                        "organizer_user_id": {
+                          "type": "string",
+                          "description": "The user ID of the organizer of the reservation"
+                        },
+                        "title": {
+                          "type": "string",
+                          "description": "Must be a short description of the reservation. *Only* meeting rooms can have a title."
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "Reservation description must be a detailed description of what the reservation is for. *Only* meeting rooms can have a description."
+                        },
+                        "resource_id": {
+                          "type": "string",
+                          "description": "The resource ID (NEVER the name) the reservation is associated to"
+                        },
+                        "start": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "The start date and time of the reservation"
+                        },
+                        "end": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "The end date and time of the reservation"
+                        },
+                        "user_ids": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array",
+                          "description": "The list of user IDs for the reservation."
+                        },
+                        "online_meeting_provider": {
+                          "type": "string",
+                          "description": "The online meeting provider to use for the reservation. This is *only* for meeting rooms."
+                        },
+                        "recurring": {
+                          "properties": {
+                            "start_date": {
+                              "type": "string",
+                              "format": "date",
+                              "description": "The start date of the recurring reservation"
+                            },
+                            "end_date": {
+                              "type": "string",
+                              "format": "date",
+                              "description": "The end date of the recurring reservation"
+                            },
+                            "rrule": {
+                              "type": "string",
+                              "description": "The recurring rule of the reservation. MUST be a valid RRULE string."
+                            }
+                          },
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "start_date",
+                            "rrule"
+                          ],
+                          "description": "The recurring reservation information if the reservation is recurring"
+                        },
+                        "workplace_request": {
+                          "properties": {
+                            "response_type": {
+                              "type": "string",
+                              "enum": [
+                                "workplace_request_result"
+                              ]
+                            },
+                            "summary": {
+                              "type": "string",
+                              "description": "Markdown response for the user to read. Must be a short summary of the result."
+                            },
+                            "title": {
+                              "type": "string",
+                              "description": "Must be a short description of the request"
+                            },
+                            "description": {
+                              "type": "string",
+                              "description": "Workplace request description must be a detailed description of the request"
+                            },
+                            "type_id": {
+                              "type": "string",
+                              "description": "Workplace request type ID or name"
+                            },
+                            "office_id": {
+                              "type": "string",
+                              "description": "ID of the office where the request will be created if not provided the user's default office should be used"
+                            },
+                            "schedule_id": {
+                              "type": "string",
+                              "description": "The ID of the schedule the workplace request will be associated to for example if equipment wants to be requested for a specific reservation providing the schedule ID can be helpful"
+                            },
+                            "resource_id": {
+                              "type": "string",
+                              "description": "The ID of the resource the workplace request will be associated to for example if there's some problem with a specific desk or meeting room providing the resource ID can be helpful"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "response_type",
+                            "summary",
+                            "title",
+                            "description",
+                            "type_id",
+                            "office_id"
+                          ],
+                          "description": "The workplace request information if the reservation is associated to a workplace request"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "organizer_user_id",
+                        "title",
+                        "resource_id",
+                        "start",
+                        "end",
+                        "user_ids"
+                      ]
+                    },
+                    "type": "array",
+                    "description": "The list of reservations information."
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "reservations"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Reservations",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_reservation_info.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_reservation_info.html"
+              }
+            },
+            {
+              "name": "show_users_working_locations",
+              "description": "Shows the working locations of users to the user. Use it after getting working locations with any tool to present the result, including the location of the current user or other users and details about existing reservations. If none of the users have a working location, do not use this tool.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the result."
+                  },
+                  "users_locations": {
+                    "additionalProperties": {
+                      "properties": {
+                        "location": {
+                          "type": "string",
+                          "description": "The user's working location type"
+                        },
+                        "user_email": {
+                          "type": "string",
+                          "format": "email",
+                          "description": "The user's email address"
+                        },
+                        "office_id": {
+                          "type": "string",
+                          "description": "Office ID when user is working from office"
+                        },
+                        "schedule_ids": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array",
+                          "description": "All schedule IDs that the user has active reservations for"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "location",
+                        "user_email"
+                      ]
+                    },
+                    "type": "object",
+                    "description": "A map of user IDs to their working location information"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "users_locations"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Users working locations",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_users_working_locations.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_users_working_locations.html"
+              }
+            },
+            {
+              "name": "show_visit_info",
+              "description": "Shows a visitor invitation to the user as a form they can review and send. Showing it does not invite the visitor: they are invited when the user sends the form or when you call `create_visit`, and then get an email with a check-in code.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the invitation."
+                  },
+                  "visitor_name": {
+                    "type": "string",
+                    "description": "Full name of the visitor"
+                  },
+                  "visitor_email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email of the visitor"
+                  },
+                  "company": {
+                    "type": "string",
+                    "description": "Company of the visitor when the user mentions it"
+                  },
+                  "office_id": {
+                    "type": "string",
+                    "description": "ID of the office the visitor comes to"
+                  },
+                  "expected": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the visitor is expected"
+                  },
+                  "visitor_type_id": {
+                    "type": "string",
+                    "description": "Visitor type ID from get_visitor_types"
+                  },
+                  "host_id": {
+                    "type": "string",
+                    "description": "User ID of the host the visitor comes to see"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "visitor_name",
+                  "visitor_email",
+                  "office_id",
+                  "expected"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Visitor invitation",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_visit_info.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_visit_info.html"
+              }
+            },
+            {
+              "name": "show_visits",
+              "description": "Shows the visitors expected or visiting on a day to the user, after getting them with `get_visits`.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of who is visiting."
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Day of the visits"
+                  },
+                  "office_id": {
+                    "type": "string",
+                    "description": "Office passed to get_visits"
+                  },
+                  "visit_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "description": "IDs of the visits to show from get_visits"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "date"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Visits",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_visits.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_visits.html"
+              }
+            },
+            {
+              "name": "show_workplace_request_info",
+              "description": "Shows a proposed workplace request to the user as a form they can review and submit. Showing it does not create the request: it is created when the user submits the form or when you call `create_workplace_request`.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of the result."
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Must be a short description of the request"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Workplace request description must be a detailed description of the request"
+                  },
+                  "type_id": {
+                    "type": "string",
+                    "description": "Workplace request type ID or name"
+                  },
+                  "office_id": {
+                    "type": "string",
+                    "description": "ID of the office where the request will be created if not provided the user's default office should be used"
+                  },
+                  "schedule_id": {
+                    "type": "string",
+                    "description": "The ID of the schedule the workplace request will be associated to for example if equipment wants to be requested for a specific reservation providing the schedule ID can be helpful"
+                  },
+                  "resource_id": {
+                    "type": "string",
+                    "description": "The ID of the resource the workplace request will be associated to for example if there's some problem with a specific desk or meeting room providing the resource ID can be helpful"
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "title",
+                  "description",
+                  "type_id",
+                  "office_id"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Workplace request",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_workplace_request_info.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_workplace_request_info.html"
+              }
+            },
+            {
+              "name": "show_workplace_requests",
+              "description": "Shows existing workplace requests to the user: their status, who they are assigned to and the last update, with the comments and changes when a single request is shown. Use it after `get_my_workplace_requests`, `get_workplace_request` or `get_workplace_requests_summary`, passing the request IDs (not numbers) in the order to show them.",
+              "inputSchema": {
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Markdown response for the user to read. Must be a short summary of where the requests stand."
+                  },
+                  "request_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "description": "IDs (not numbers) of the requests to show, in the order to show them. A single ID shows that request with its activity."
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "summary",
+                  "request_ids"
+                ]
+              },
+              "annotations": {
+                "destructiveHint": false,
+                "openWorldHint": false,
+                "title": "Workplace requests",
+                "readOnlyHint": true
+              },
+              "_meta": {
+                "ui": {
+                  "resourceUri": "ui://tactic/show_workplace_requests.html"
+                },
+                "ui/resourceUri": "ui://tactic/show_workplace_requests.html"
+              }
+            }
+          ]
+        }
+      },
+      "run_for_functions": [
+        "build_report_query",
+        "cancel_reservation",
+        "check_in",
+        "check_out",
+        "create_reservation",
+        "create_visit",
+        "create_workplace_request",
+        "find_available_resources",
+        "find_teams",
+        "find_users",
+        "get_current_date_time",
+        "get_current_user_context",
+        "get_date_time",
+        "get_floor_occupancy",
+        "get_my_workplace_requests",
+        "get_users_in_office_at_week",
+        "get_users_working_locations_at_week",
+        "get_workplace_request",
+        "get_workplace_requests_summary",
+        "list_office_places",
+        "list_offices",
+        "list_report_boards",
+        "list_workplace_request_types",
+        "move_reservation",
+        "release_reservations",
+        "report_outlook",
+        "save_report_to_board",
+        "search_offices_documents",
+        "show_floor_map",
+        "show_release_reservations",
+        "show_report",
+        "show_reservation_change",
+        "show_reservation_info",
+        "show_users_working_locations",
+        "show_visit_info",
+        "show_visits",
+        "show_workplace_request_info",
+        "show_workplace_requests"
+      ]
+    }
+  ]
+}

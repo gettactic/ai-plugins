@@ -22,7 +22,7 @@ function fixture(t) {
 }
 
 test('platform layouts preserve endpoint and use host-specific authentication', () => {
-  for (const target of TARGETS) {
+  for (const target of ['portable', 'chatgpt', 'claude']) {
     const { files } = packageFiles(ROOT, target);
     let server;
     if (target === 'claude') {
@@ -50,11 +50,37 @@ test('all platforms contain identical skills and resolve icon paths', () => {
   const skills = (files) => Object.fromEntries(Object.entries(files).filter(([name]) => name.startsWith('skills/')));
   const expected = skills(packageFiles(ROOT, 'portable').files);
   assert.ok(Object.keys(expected).length >= 2);
-  for (const target of TARGETS) assert.deepEqual(skills(packageFiles(ROOT, target).files), expected);
+  for (const target of TARGETS.filter((target) => target !== 'copilot-studio-setup')) {
+    assert.deepEqual(skills(packageFiles(ROOT, target).files), expected);
+  }
   for (const [name, data] of Object.entries(expected)) assert.deepEqual(data, readFileSync(join(ROOT, name)));
   const { files } = packageFiles(ROOT, 'chatgpt');
   const ui = JSON.parse(files['plugin.json']).extensions['com.openai'].interface;
   for (const key of ['logo', 'composerIcon']) assert.ok(files[ui[key].replace(/^\.\//, '')]);
+});
+
+test('Studio uploads contain one root skill each, preserve references, and exclude plugin manifests', () => {
+  const { version, files } = packageFiles(ROOT, 'copilot-studio-setup');
+  const source = packageFiles(ROOT, 'portable').files;
+  const uploads = Object.entries(files).filter(([name]) => name.startsWith('uploads/'));
+  const names = Object.keys(source).filter((name) => name.endsWith('/SKILL.md'))
+    .map((name) => name.split('/')[1]);
+  assert.equal(uploads.length, names.length);
+  for (const name of names) {
+    const filename = `uploads/tactic-copilot-studio-${name.slice('tactic-'.length)}-${version}.zip`;
+    const extracted = Object.fromEntries(Object.entries(unzipSync(files[filename]))
+      .map(([path, bytes]) => [path, Buffer.from(bytes)]));
+    const prefix = `skills/${name}/`;
+    const expected = Object.fromEntries(Object.entries(source)
+      .filter(([path]) => path.startsWith(prefix))
+      .map(([path, bytes]) => [path.slice(prefix.length), bytes]));
+    assert.deepEqual(extracted, expected);
+    assert.ok(extracted['SKILL.md']);
+    assert.ok(!Object.keys(extracted).some((path) => /plugin\.json|mcp\.json|solution\.xml/.test(path)));
+  }
+  assert.match(files['README.md'].toString(), /not a Power\nPlatform solution/);
+  const endpoint = JSON.parse(readFileSync(join(ROOT, 'mcp.json'))).mcpServers.tactic.url;
+  assert.ok(files['connection.txt'].toString().includes(endpoint));
 });
 
 test('ZIPs are reproducible and extract to the exact files without a wrapper', (t) => {
